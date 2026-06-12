@@ -1,10 +1,11 @@
 "use client";
 import { useState, useRef, useCallback } from "react";
-import { useHealthStore, FoodEntry } from "../store/healthStore";
+import { useHealthStore, useActiveMemberData, FoodEntry } from "../store/healthStore";
 import { Camera, Upload, Loader2, Trash2, Apple, Clock } from "lucide-react";
 
 export default function FoodTracker() {
-  const { foodHistory, addFoodEntry, removeFoodEntry } = useHealthStore();
+  const { addFoodEntry, removeFoodEntry, activeMemberId } = useHealthStore();
+  const { foodHistory } = useActiveMemberData();
   const [analyzing, setAnalyzing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedMeal, setSelectedMeal] = useState<FoodEntry["meal"]>("lunch");
@@ -43,6 +44,7 @@ export default function FoodTracker() {
       const data = await res.json();
       const entry: FoodEntry = {
         id: Date.now().toString(),
+        memberId: activeMemberId,
         date: new Date().toISOString().split("T")[0],
         meal: selectedMeal,
         imageUrl: previewUrl || undefined,

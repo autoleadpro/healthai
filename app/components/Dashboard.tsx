@@ -1,10 +1,16 @@
 "use client";
-import { useHealthStore } from "../store/healthStore";
+import { useHealthStore, useActiveMemberData } from "../store/healthStore";
 import { Activity, Apple, FlaskConical, TrendingUp, AlertCircle, CheckCircle, Clock } from "lucide-react";
 import { RadialBarChart, RadialBar, ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
 
 export default function Dashboard() {
-  const { userProfile, foodHistory, labResults, healthAnalysis, setActiveTab } = useHealthStore();
+  const { userProfile: storeProfile, setActiveTab } = useHealthStore();
+  const { member, foodHistory, labResults, analysis: healthAnalysis } = useActiveMemberData();
+
+  // "me" keeps using the editable profile; family members carry their own measurements
+  const userProfile = member.id === "me"
+    ? storeProfile
+    : { ...storeProfile, name: member.name, age: member.age, gender: member.gender, height: member.height, weight: member.weight };
 
   const today = new Date().toISOString().split("T")[0];
   const todayFoods = foodHistory.filter((f) => f.date === today);

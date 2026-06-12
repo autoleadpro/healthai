@@ -18,8 +18,9 @@ const ADMIN_PASSWORD = PROPS.getProperty("ADMIN_PASSWORD");
 
 const SHEETS = {
   Customers: ["id", "createdAt", "name", "email", "phone", "language", "plan", "planExpiry", "aiCredits", "accessCode", "profile", "status", "notes"],
-  Records: ["id", "customerId", "date", "category", "name", "value", "unit", "normalMin", "normalMax", "createdAt"],
-  FoodLogs: ["id", "customerId", "date", "meal", "foods", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "nutritionScore", "assessment", "createdAt"],
+  Members: ["id", "customerId", "name", "relation", "age", "gender", "height", "weight", "avatar", "conditions", "createdAt"],
+  Records: ["id", "customerId", "memberId", "date", "category", "name", "value", "unit", "normalMin", "normalMax", "createdAt"],
+  FoodLogs: ["id", "customerId", "memberId", "date", "meal", "foods", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "nutritionScore", "assessment", "createdAt"],
   Analyses: ["id", "customerId", "createdAt", "overallScore", "riskLevel", "payload"],
   Payments: ["id", "customerId", "createdAt", "provider", "amount", "currency", "plan", "status", "externalRef"],
   Usage: ["timestamp", "customerId", "action", "detail"],
@@ -64,6 +65,11 @@ function handle(e) {
       createCustomer: () => createCustomer(req.data),
       updateCustomer: () => updateRow("Customers", req.id, req.data),
       deleteCustomer: () => softDelete(req.id),
+      // Family members
+      listMembers: () => listRows("Members", "customerId", req.customerId),
+      addMember: () => appendRow("Members", Object.assign({ id: uid(), createdAt: now() }, req.data)),
+      updateMember: () => updateRow("Members", req.id, req.data),
+      deleteMember: () => hardDeleteRow("Members", req.id),
       // Records & food
       listRecords: () => listRows("Records", "customerId", req.customerId),
       addRecord: () => appendRow("Records", Object.assign({ id: uid(), createdAt: now() }, req.data)),

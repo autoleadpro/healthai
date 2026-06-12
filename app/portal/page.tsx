@@ -8,6 +8,7 @@ import FoodTracker from "../components/FoodTracker";
 import LabResults from "../components/LabResults";
 import HealthAnalysis from "../components/HealthAnalysis";
 import Profile from "../components/Profile";
+import FamilyBar from "../components/FamilyBar";
 import { LayoutDashboard, Apple, FlaskConical, Brain, User } from "lucide-react";
 import { useHealthStore } from "../store/healthStore";
 
@@ -132,6 +133,7 @@ export default function PortalPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 pb-28">
+        {activeTab !== "profile" && <FamilyBar />}
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "food" && <FoodTracker />}
         {activeTab === "lab" && <LabResults />}

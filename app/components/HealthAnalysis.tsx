@@ -1,10 +1,14 @@
 "use client";
 import { useState } from "react";
-import { useHealthStore } from "../store/healthStore";
+import { useHealthStore, useActiveMemberData } from "../store/healthStore";
 import { Brain, Loader2, AlertCircle, CheckCircle, Utensils, Dumbbell, Heart, Stethoscope, Calendar, ChevronDown, ChevronUp } from "lucide-react";
 
 export default function HealthAnalysis() {
-  const { userProfile, foodHistory, labResults, healthAnalysis, setHealthAnalysis } = useHealthStore();
+  const { userProfile: storeProfile, setHealthAnalysis } = useHealthStore();
+  const { member, foodHistory, labResults, analysis: healthAnalysis } = useActiveMemberData();
+  const userProfile = member.id === "me"
+    ? storeProfile
+    : { ...storeProfile, name: member.name, age: member.age, gender: member.gender, height: member.height, weight: member.weight, conditions: member.conditions };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);

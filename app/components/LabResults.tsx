@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useHealthStore, LabResult } from "../store/healthStore";
+import { useHealthStore, useActiveMemberData, LabResult } from "../store/healthStore";
 import { FlaskConical, Plus, Trash2, AlertTriangle, CheckCircle, TrendingUp, TrendingDown } from "lucide-react";
 
 const LAB_CATEGORIES = {
@@ -45,7 +45,8 @@ const LAB_CATEGORIES = {
 };
 
 export default function LabResults() {
-  const { labResults, addLabResult, removeLabResult } = useHealthStore();
+  const { addLabResult, removeLabResult, activeMemberId } = useHealthStore();
+  const { labResults } = useActiveMemberData();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     category: "Sinh hóa máu",
@@ -67,6 +68,7 @@ export default function LabResults() {
     if (!form.name || !form.value) return;
     const result: LabResult = {
       id: Date.now().toString(),
+      memberId: activeMemberId,
       date: form.date,
       category: form.category,
       name: form.name,
