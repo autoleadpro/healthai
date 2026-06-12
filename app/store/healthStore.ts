@@ -14,6 +14,30 @@ export interface FamilyMember {
   conditions: string[];
 }
 
+export interface Medication {
+  id: string;
+  memberId: string;
+  name: string;
+  dosage: string; // e.g. "500mg", "1 viên"
+  times: string[]; // HH:MM, e.g. ["08:00", "20:00"]
+  withFood: "before" | "after" | "any";
+  startDate: string;
+  endDate: string; // "" = ongoing
+  notes: string;
+  color: string;
+}
+
+// One record per dose taken/skipped: key date+medId+time
+export interface DoseLog {
+  id: string;
+  memberId: string;
+  medId: string;
+  date: string;
+  time: string;
+  status: "taken" | "skipped";
+  loggedAt: string;
+}
+
 export interface DailyLog {
   id: string;
   memberId: string;
@@ -118,8 +142,14 @@ interface HealthStore {
   memberAnalyses: Record<string, HealthAnalysis>;
   dailyLogs: DailyLog[];
   dailyTips: Record<string, string>; // key: `${date}:${memberId}`
+  medications: Medication[];
+  doseLogs: DoseLog[];
   upsertDailyLog: (log: Partial<DailyLog> & { memberId: string; date: string }) => void;
   setDailyTip: (key: string, tip: string) => void;
+  addMedication: (med: Medication) => void;
+  updateMedication: (id: string, data: Partial<Medication>) => void;
+  removeMedication: (id: string) => void;
+  logDose: (log: Omit<DoseLog, "id" | "loggedAt">) => void;
   setActiveTab: (tab: string) => void;
   updateProfile: (profile: Partial<UserProfile>) => void;
   addFoodEntry: (entry: FoodEntry) => void;
@@ -157,6 +187,27 @@ export const useHealthStore = create<HealthStore>()(
       memberAnalyses: {},
       dailyLogs: [],
       dailyTips: {},
+      medications: [],
+      doseLogs: [],
+      addMedication: (med) => set((state) => ({ medications: [...state.medications, med] })),
+      updateMedication: (id, data) =>
+        set((state) => ({ medications: state.medications.map((m) => (m.id === id ? { ...m, ...data } : m)) })),
+      removeMedication: (id) =>
+        set((state) => ({
+          medications: state.medications.filter((m) => m.id !== id),
+          doseLogs: state.doseLogs.filter((d) => d.medId !== id),
+        })),
+      logDose: (log) =>
+        set((state) => {
+          const existing = state.doseLogs.find(
+            (d) => d.medId === log.medId && d.date === log.date && d.time === log.time
+          );
+          const entry: DoseLog = { ...log, id: Date.now().toString(36), loggedAt: new Date().toISOString() };
+          if (existing) {
+            return { doseLogs: state.doseLogs.map((d) => (d.id === existing.id ? { ...entry, id: existing.id } : d)) };
+          }
+          return { doseLogs: [entry, ...state.doseLogs].slice(0, 2000) };
+        }),
       upsertDailyLog: (log) =>
         set((state) => {
           const existing = state.dailyLogs.find((l) => l.date === log.date && l.memberId === log.memberId);
@@ -186,6 +237,8 @@ export const useHealthStore = create<HealthStore>()(
           foodHistory: state.foodHistory.filter((f) => (f.memberId || "me") !== id),
           labResults: state.labResults.filter((r) => (r.memberId || "me") !== id),
           dailyLogs: state.dailyLogs.filter((l) => l.memberId !== id),
+          medications: state.medications.filter((m) => m.memberId !== id),
+          doseLogs: state.doseLogs.filter((d) => d.memberId !== id),
         })),
       setActiveMember: (id) => set({ activeMemberId: id }),
       updateProfile: (profile) =>
@@ -210,7 +263,7 @@ export const useHealthStore = create<HealthStore>()(
 
 // Data scoped to the currently selected family member.
 export function useActiveMemberData() {
-  const { members, activeMemberId, foodHistory, labResults, memberAnalyses, healthAnalysis, dailyLogs } = useHealthStore();
+  const { members, activeMemberId, foodHistory, labResults, memberAnalyses, healthAnalysis, dailyLogs, medications, doseLogs } = useHealthStore();
   const member = members.find((m) => m.id === activeMemberId) || members[0];
   const memberLogs = dailyLogs.filter((l) => l.memberId === activeMemberId);
   return {
@@ -220,6 +273,8 @@ export function useActiveMemberData() {
     analysis: memberAnalyses[activeMemberId] ?? (activeMemberId === "me" ? healthAnalysis : null),
     dailyLogs: memberLogs,
     streak: computeStreak(memberLogs),
+    medications: medications.filter((m) => m.memberId === activeMemberId),
+    doseLogs: doseLogs.filter((d) => d.memberId === activeMemberId),
   };
 }
 

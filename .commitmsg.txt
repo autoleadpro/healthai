@@ -1,0 +1,11 @@
+Add medication schedule and daily dose tracking
+
+- Medications tab: per-member meds with dosage, multiple daily times,
+  before/after food, start/end dates, color tags, notes
+- Today's doses list with one-tap Take / Skip logging
+- Compact today's-meds reminder card on the dashboard
+- Missed-dose detection feeds family alerts so caregivers see when an
+  elderly parent forgets a dose
+- Store: medications + doseLogs, scoped per family member
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>

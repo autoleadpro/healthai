@@ -14,7 +14,9 @@ import DailyCheckIn from "../components/DailyCheckIn";
 import FamilyAlerts from "../components/FamilyAlerts";
 import ClinicMessages from "../components/ClinicMessages";
 import Trends from "../components/Trends";
-import { TrendingUp } from "lucide-react";
+import Medications from "../components/Medications";
+import MedReminder from "../components/MedReminder";
+import { TrendingUp, Pill } from "lucide-react";
 import { LayoutDashboard, Apple, FlaskConical, Brain, User } from "lucide-react";
 import { useHealthStore } from "../store/healthStore";
 
@@ -116,9 +118,10 @@ export default function PortalPage() {
   const TABS = [
     { id: "dashboard", label: t("dashboard"), icon: LayoutDashboard },
     { id: "food", label: t("food"), icon: Apple },
+    { id: "meds", label: lang === "vi" ? "Thuốc" : "Meds", icon: Pill },
     { id: "lab", label: t("lab"), icon: FlaskConical },
     { id: "trends", label: lang === "vi" ? "Xu hướng" : "Trends", icon: TrendingUp },
-    { id: "analysis", label: t("analysis"), icon: Brain },
+    { id: "analysis", label: lang === "vi" ? "AI" : "AI", icon: Brain },
     { id: "profile", label: t("profile"), icon: User },
   ];
 
@@ -201,11 +204,13 @@ export default function PortalPage() {
           <>
             <ClinicMessages />
             <FamilyAlerts />
+            <MedReminder />
             <DailyCheckIn />
             <Dashboard />
           </>
         )}
         {activeTab === "food" && <FoodTracker />}
+        {activeTab === "meds" && <Medications />}
         {activeTab === "lab" && <LabResults />}
         {activeTab === "trends" && <Trends />}
         {activeTab === "analysis" && <HealthAnalysis />}

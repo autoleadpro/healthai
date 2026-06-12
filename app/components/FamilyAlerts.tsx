@@ -10,11 +10,12 @@ interface Alert {
   severity: "warn" | "danger";
   textVi: string;
   textEn: string;
+  tab?: string;
 }
 
 // Scans ALL family members for worrying trends — the reason caregivers open the app daily.
 export default function FamilyAlerts() {
-  const { members, labResults, dailyLogs, setActiveMember, setActiveTab } = useHealthStore();
+  const { members, labResults, dailyLogs, medications, doseLogs, setActiveMember, setActiveTab } = useHealthStore();
   const { lang } = useLang();
 
   const alerts = useMemo(() => {
@@ -68,7 +69,29 @@ export default function FamilyAlerts() {
         }
       }
 
-      // 3. Poor sleep streak
+      // 3. Missed medication doses today (past their time, not logged)
+      const today = new Date().toISOString().split("T")[0];
+      const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+      const memberMeds = medications.filter((md) => md.memberId === m.id && (!md.endDate || md.endDate >= today) && md.startDate <= today);
+      let missed = 0;
+      memberMeds.forEach((md) => {
+        md.times.forEach((time) => {
+          const [h, mm] = time.split(":").map(Number);
+          const due = h * 60 + mm;
+          const logged = doseLogs.find((d) => d.medId === md.id && d.date === today && d.time === time);
+          if (due + 60 < nowMin && !logged) missed++; // overdue by >1h and not taken/skipped
+        });
+      });
+      if (missed > 0) {
+        out.push({
+          memberId: m.id, memberName: m.name, avatar: m.avatar, severity: "danger",
+          textVi: `Quên ${missed} liều thuốc hôm nay`,
+          textEn: `${missed} medication dose${missed > 1 ? "s" : ""} missed today`,
+          tab: "meds",
+        });
+      }
+
+      // 4. Poor sleep streak
       const recentSleep = memberLogs.filter((l) => l.sleep > 0).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
       if (recentSleep.length >= 4 && recentSleep.every((l) => l.sleep <= 2)) {
         out.push({
@@ -79,8 +102,8 @@ export default function FamilyAlerts() {
       }
     });
 
-    return out.slice(0, 5);
-  }, [members, labResults, dailyLogs]);
+    return out.slice(0, 6);
+  }, [members, labResults, dailyLogs, medications, doseLogs]);
 
   if (alerts.length === 0) return null;
 
@@ -95,7 +118,7 @@ export default function FamilyAlerts() {
         {alerts.map((a, i) => (
           <button
             key={i}
-            onClick={() => { setActiveMember(a.memberId); setActiveTab("lab"); }}
+            onClick={() => { setActiveMember(a.memberId); setActiveTab(a.tab || "lab"); }}
             className="w-full px-4 py-3 flex items-center gap-3 hover:bg-red-50/50 transition text-left"
           >
             <span className="text-xl">{a.avatar}</span>
