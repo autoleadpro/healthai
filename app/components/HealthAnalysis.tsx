@@ -13,6 +13,13 @@ export default function HealthAnalysis() {
     setLoading(true);
     setError(null);
     try {
+      const { consumeCredit } = await import("../lib/credits");
+      const credit = await consumeCredit("health_analysis");
+      if (!credit.ok) {
+        setError("Hết lượt AI. Vui lòng nâng cấp gói tại trang Bảng giá. / Out of AI credits — please upgrade.");
+        setLoading(false);
+        return;
+      }
       const res = await fetch("/api/analyze-health", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

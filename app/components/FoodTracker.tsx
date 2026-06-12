@@ -29,6 +29,13 @@ export default function FoodTracker() {
     setAnalyzing(true);
     setError(null);
     try {
+      const { consumeCredit } = await import("../lib/credits");
+      const credit = await consumeCredit("food_analysis");
+      if (!credit.ok) {
+        setError("Hết lượt AI. Vui lòng nâng cấp gói. / Out of AI credits — please upgrade.");
+        setAnalyzing(false);
+        return;
+      }
       const form = new FormData();
       form.append("image", pendingFile);
       const res = await fetch("/api/analyze-food", { method: "POST", body: form });

@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HealthAI — Smart Health Tracking Platform
 
-## Getting Started
+AI-powered health tracking for individuals, doctors, and clinics. Snap meal photos for instant nutrition analysis, track lab results, and get personalized AI lifestyle coaching. Bilingual (English / Tiếng Việt).
 
-First, run the development server:
+## Architecture
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+Landing (/)  →  Customer Portal (/portal)  →  Pricing (/pricing)  →  Admin (/admin)
+                       │
+                Next.js API routes (AI + payments + proxy)
+                       │
+        ┌──────────────┼──────────────────┐
+   Claude AI    Google Apps Script    Stripe + PayOS
+  (vision +      (REST API over       (international +
+   advice)       Google Sheets DB)     VietQR payments)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **Zero hosting cost backend**: Google Sheets as database, Apps Script as REST API
+- **Multi-tenant**: each customer gets a 6-character access code; admin manages everyone
+- **AI credits**: free plan gets 5 credits/month; Pro/Clinic unlimited
+- **Payments**: Stripe Checkout (cards, Apple/Google Pay) + PayOS (VietQR bank transfer)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1. Backend (Google Apps Script)
+1. Create a Google Sheet, copy its ID from the URL
+2. Go to [script.google.com](https://script.google.com) → New project → paste `apps-script/Code.gs`
+3. Project Settings → Script Properties: set `SHEET_ID`, `API_SECRET` (any random string), `ADMIN_PASSWORD`
+4. Run `setupSheets()` once from the editor (authorize when prompted)
+5. Deploy → New deployment → Web app → Execute as **Me**, Access **Anyone** → copy the `/exec` URL
 
-## Learn More
+### 2. Frontend
+```bash
+npm install
+```
+Fill in `.env.local`:
 
-To learn more about Next.js, take a look at the following resources:
+| Variable | Where to get it |
+|---|---|
+| `ANTHROPIC_API_KEY` | console.anthropic.com |
+| `GAS_URL` | Apps Script deployment URL (step 1.5) |
+| `GAS_API_SECRET` | same value as Script Property `API_SECRET` |
+| `ADMIN_PASSWORD` / `ADMIN_SESSION_TOKEN` | choose your own |
+| `STRIPE_SECRET_KEY` | dashboard.stripe.com/apikeys (optional) |
+| `PAYOS_CLIENT_ID/API_KEY/CHECKSUM_KEY` | my.payos.vn (optional) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run dev   # http://localhost:3000
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 3. Deploy
+Vercel free tier works out of the box: `vercel --prod`. Add the env vars in Vercel project settings.
 
-## Deploy on Vercel
+## Plans
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| | Free | Pro ($7.99 / 199K VND) | Clinic ($49 / 1.2M VND) |
+|---|---|---|---|
+| AI analysis | 5/month | Unlimited | Unlimited |
+| Patients | 1 | 1 | Unlimited |
+| Trend charts | — | ✓ | ✓ |
+| Practitioner dashboard | — | — | ✓ |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Production notes
+- Payment confirmation currently uses return-URL; add Stripe/PayOS **webhooks** before charging real customers
+- Google Sheets handles ~thousands of customers; migrate to Supabase/Postgres beyond that (only `app/api/backend/route.ts` changes)
+- This app provides wellness guidance, not medical diagnosis — keep the disclaimer visible to end users
