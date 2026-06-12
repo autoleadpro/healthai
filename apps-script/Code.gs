@@ -17,7 +17,8 @@ const API_SECRET = PROPS.getProperty("API_SECRET");
 const ADMIN_PASSWORD = PROPS.getProperty("ADMIN_PASSWORD");
 
 const SHEETS = {
-  Customers: ["id", "createdAt", "name", "email", "phone", "language", "plan", "planExpiry", "aiCredits", "accessCode", "profile", "status", "notes"],
+  Customers: ["id", "createdAt", "name", "email", "phone", "language", "plan", "planExpiry", "aiCredits", "accessCode", "profile", "status", "notes", "clinicId"],
+  Clinics: ["id", "createdAt", "name", "tagline", "logo", "phone", "address", "email", "website", "color", "specialty"],
   Members: ["id", "customerId", "name", "relation", "age", "gender", "height", "weight", "avatar", "conditions", "createdAt"],
   Records: ["id", "customerId", "memberId", "date", "category", "name", "value", "unit", "normalMin", "normalMax", "createdAt"],
   FoodLogs: ["id", "customerId", "memberId", "date", "meal", "foods", "totalCalories", "totalProtein", "totalCarbs", "totalFat", "nutritionScore", "assessment", "createdAt"],
@@ -65,6 +66,12 @@ function handle(e) {
       createCustomer: () => createCustomer(req.data),
       updateCustomer: () => updateRow("Customers", req.id, req.data),
       deleteCustomer: () => softDelete(req.id),
+      // Clinics (getClinic is public so patients see branding)
+      getClinic: () => findRow("Clinics", "id", req.id),
+      listClinics: () => listRows("Clinics"),
+      createClinic: () => appendRow("Clinics", Object.assign({ id: uid(), createdAt: now() }, req.data)),
+      updateClinic: () => updateRow("Clinics", req.id, req.data),
+      deleteClinic: () => hardDeleteRow("Clinics", req.id),
       // Family members
       listMembers: () => listRows("Members", "customerId", req.customerId),
       addMember: () => appendRow("Members", Object.assign({ id: uid(), createdAt: now() }, req.data)),
@@ -113,6 +120,7 @@ function createCustomer(data) {
     profile: JSON.stringify(data.profile || {}),
     status: "active",
     notes: data.notes || "",
+    clinicId: data.clinicId || "",
   };
   appendRow("Customers", row);
   return row;

@@ -48,8 +48,18 @@ Hãy trả về JSON với cấu trúc sau (chỉ trả JSON):
     "saturday": {"breakfast": "...", "lunch": "...", "dinner": "...", "exercise": "..."},
     "sunday": {"breakfast": "...", "lunch": "...", "dinner": "...", "exercise": "..."}
   },
+  "nextSteps": {
+    "period": "2-4 tuần tới",
+    "dietFocus": [{"action": "việc cần làm về ăn uống", "reason": "lý do dựa trên dữ liệu", "target": "mục tiêu đo được"}],
+    "activityFocus": [{"action": "hoạt động thể chất cụ thể", "reason": "lý do", "target": "mục tiêu đo được"}],
+    "habits": ["thói quen nhỏ nên bắt đầu ngay 1", "thói quen 2"],
+    "avoid": ["điều cần tránh trong thời gian này 1", "điều 2"],
+    "expectedOutcome": "kết quả kỳ vọng nếu tuân thủ sau 2-4 tuần"
+  },
   "followUp": "thời gian tái khám và xét nghiệm tiếp theo"
-}`;
+}
+
+Lưu ý: dietFocus và activityFocus mỗi loại 2-3 mục, phải cụ thể và đo được (VD: "đi bộ nhanh 30 phút, 5 ngày/tuần" chứ không phải "tập thể dục nhiều hơn").`;
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-6",

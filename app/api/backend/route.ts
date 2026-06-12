@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 const ADMIN_ACTIONS = new Set([
   "listCustomers", "createCustomer", "updateCustomer", "deleteCustomer",
   "addCredits", "recordPayment", "listPayments", "stats",
+  "listClinics", "createClinic", "updateClinic", "deleteClinic",
 ]);
 
 export async function POST(request: NextRequest) {

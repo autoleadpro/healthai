@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { backend, Customer, Stats } from "../lib/api";
+import { backend, Customer, Stats, Clinic } from "../lib/api";
 import { useT, useLang } from "../lib/i18n";
-import { Users, Plus, Shield, DollarSign, Sparkles, Copy, Check, Trash2, RefreshCw, Crown, Loader2 } from "lucide-react";
+import { Users, Plus, Shield, DollarSign, Sparkles, Copy, Check, Trash2, RefreshCw, Crown, Loader2, Building2, X } from "lucide-react";
 
 function adminFetch<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
   const token = sessionStorage.getItem("admin-token") || "";
@@ -19,20 +19,26 @@ export default function AdminPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", plan: "free", language: "vi" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", plan: "free", language: "vi", clinicId: "" });
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [clinics, setClinics] = useState<Clinic[]>([]);
+  const [showClinics, setShowClinics] = useState(false);
+  const [clinicForm, setClinicForm] = useState<Partial<Clinic>>({ logo: "🏥", color: "#16a34a" });
+  const [editingClinicId, setEditingClinicId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [list, s] = await Promise.all([
+      const [list, s, cl] = await Promise.all([
         adminFetch<Customer[]>("listCustomers"),
         adminFetch<Stats>("stats"),
+        adminFetch<Clinic[]>("listClinics"),
       ]);
       setCustomers(Array.isArray(list) ? list.filter((c) => c.status !== "deleted") : []);
       setStats(s);
+      setClinics(Array.isArray(cl) ? cl : []);
     } catch {
       setError("Không tải được dữ liệu. Kiểm tra cấu hình GAS_URL trong .env.local");
     } finally {
@@ -70,7 +76,25 @@ export default function AdminPage() {
     if (!form.name) return;
     await adminFetch("createCustomer", { data: form });
     setShowAdd(false);
-    setForm({ name: "", email: "", phone: "", plan: "free", language: "vi" });
+    setForm({ name: "", email: "", phone: "", plan: "free", language: "vi", clinicId: "" });
+    load();
+  };
+
+  const handleSaveClinic = async () => {
+    if (!clinicForm.name) return;
+    if (editingClinicId) {
+      await adminFetch("updateClinic", { id: editingClinicId, data: clinicForm });
+    } else {
+      await adminFetch("createClinic", { data: clinicForm });
+    }
+    setClinicForm({ logo: "🏥", color: "#16a34a" });
+    setEditingClinicId(null);
+    load();
+  };
+
+  const handleDeleteClinic = async (id: string) => {
+    if (!confirm(lang === "vi" ? "Xóa phòng khám này?" : "Delete this clinic?")) return;
+    await adminFetch("deleteClinic", { id });
     load();
   };
 
@@ -176,6 +200,64 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {/* Clinics */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <button onClick={() => setShowClinics(!showClinics)} className="w-full px-5 py-4 flex items-center justify-between hover:bg-gray-50 transition">
+            <div className="flex items-center gap-2 font-medium text-gray-700">
+              <Building2 size={18} className="text-purple-500" />
+              {lang === "vi" ? "Phòng khám" : "Clinics"} ({clinics.length})
+            </div>
+            <Plus size={16} className={`text-gray-400 transition-transform ${showClinics ? "rotate-45" : ""}`} />
+          </button>
+          {showClinics && (
+            <div className="px-5 pb-5 space-y-4">
+              {/* Clinic list */}
+              {clinics.map((cl) => (
+                <div key={cl.id} className="flex items-center justify-between p-3 rounded-xl border" style={{ borderColor: cl.color + "40", backgroundColor: cl.color + "08" }}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{cl.logo?.startsWith("http") ? <img src={cl.logo} alt="" className="w-9 h-9 rounded-lg object-cover" /> : cl.logo}</span>
+                    <div>
+                      <p className="font-medium text-gray-800 text-sm">{cl.name}</p>
+                      <p className="text-xs text-gray-400">{cl.tagline || cl.specialty || "—"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => { setEditingClinicId(cl.id); setClinicForm(cl); }} className="text-xs text-purple-500 hover:bg-purple-50 px-2 py-1 rounded-lg">
+                      {lang === "vi" ? "Sửa" : "Edit"}
+                    </button>
+                    <button onClick={() => handleDeleteClinic(cl.id)} className="text-gray-300 hover:text-red-400 p-1"><Trash2 size={13} /></button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Clinic form */}
+              <div className="border-t border-gray-50 pt-4 space-y-3">
+                <p className="text-xs font-semibold text-gray-500">
+                  {editingClinicId ? (lang === "vi" ? "Sửa phòng khám" : "Edit clinic") : (lang === "vi" ? "Thêm phòng khám mới" : "New clinic")}
+                  {editingClinicId && (
+                    <button onClick={() => { setEditingClinicId(null); setClinicForm({ logo: "🏥", color: "#16a34a" }); }} className="ml-2 text-gray-300 hover:text-gray-500"><X size={12} className="inline" /></button>
+                  )}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={clinicForm.name || ""} onChange={(e) => setClinicForm((f) => ({ ...f, name: e.target.value }))} placeholder={lang === "vi" ? "Tên phòng khám *" : "Clinic name *"} className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-400 col-span-2" />
+                  <input value={clinicForm.tagline || ""} onChange={(e) => setClinicForm((f) => ({ ...f, tagline: e.target.value }))} placeholder={lang === "vi" ? "Slogan (VD: Tận tâm vì sức khỏe)" : "Tagline"} className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-400 col-span-2" />
+                  <input value={clinicForm.specialty || ""} onChange={(e) => setClinicForm((f) => ({ ...f, specialty: e.target.value }))} placeholder={lang === "vi" ? "Chuyên khoa" : "Specialty"} className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-400" />
+                  <input value={clinicForm.phone || ""} onChange={(e) => setClinicForm((f) => ({ ...f, phone: e.target.value }))} placeholder={lang === "vi" ? "SĐT" : "Phone"} className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-400" />
+                  <input value={clinicForm.address || ""} onChange={(e) => setClinicForm((f) => ({ ...f, address: e.target.value }))} placeholder={lang === "vi" ? "Địa chỉ" : "Address"} className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-400 col-span-2" />
+                  <input value={clinicForm.logo || ""} onChange={(e) => setClinicForm((f) => ({ ...f, logo: e.target.value }))} placeholder={lang === "vi" ? "Logo: emoji hoặc URL ảnh" : "Logo: emoji or image URL"} className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-400" />
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={clinicForm.color || "#16a34a"} onChange={(e) => setClinicForm((f) => ({ ...f, color: e.target.value }))} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
+                    <span className="text-xs text-gray-400">{lang === "vi" ? "Màu thương hiệu" : "Brand color"}</span>
+                  </div>
+                </div>
+                <button onClick={handleSaveClinic} className="w-full bg-purple-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-purple-700">
+                  {t("save")}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Add customer */}
         <button onClick={() => setShowAdd(!showAdd)} className="w-full bg-purple-600 text-white py-3 rounded-2xl font-medium hover:bg-purple-700 transition flex items-center justify-center gap-2">
           <Plus size={18} /> {t("addCustomer")}
@@ -191,6 +273,10 @@ export default function AdminPage() {
                 <option value="free">Free</option>
                 <option value="pro">Pro</option>
                 <option value="clinic">Clinic</option>
+              </select>
+              <select value={form.clinicId} onChange={(e) => setForm((f) => ({ ...f, clinicId: e.target.value }))} className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-purple-400 col-span-2">
+                <option value="">{lang === "vi" ? "— Không thuộc phòng khám —" : "— No clinic —"}</option>
+                {clinics.map((cl) => <option key={cl.id} value={cl.id}>{cl.logo?.startsWith("http") ? "🏥" : cl.logo} {cl.name}</option>)}
               </select>
             </div>
             <button onClick={handleAdd} className="w-full bg-purple-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-purple-700">

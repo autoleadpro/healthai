@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { backend, Customer } from "../lib/api";
+import { backend, Customer, Clinic } from "../lib/api";
+import { Phone, MapPin } from "lucide-react";
 import { useT, useLang } from "../lib/i18n";
 import { HeartPulse, KeyRound, Loader2, Sparkles, Crown, LogOut } from "lucide-react";
 import Dashboard from "../components/Dashboard";
@@ -17,6 +18,7 @@ export default function PortalPage() {
   const { lang, setLang } = useLang();
   const { activeTab, setActiveTab } = useHealthStore();
   const [customer, setCustomer] = useState<Customer | null>(null);
+  const [clinic, setClinic] = useState<Clinic | null>(null);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -26,7 +28,24 @@ export default function PortalPage() {
     if (saved) {
       try { setCustomer(JSON.parse(saved)); } catch {}
     }
+    const savedClinic = localStorage.getItem("portal-clinic");
+    if (savedClinic) {
+      try { setClinic(JSON.parse(savedClinic)); } catch {}
+    }
   }, []);
+
+  useEffect(() => {
+    if (customer?.clinicId && !clinic) {
+      backend<Clinic | null>("getClinic", { id: customer.clinicId })
+        .then((cl) => {
+          if (cl && cl.id) {
+            setClinic(cl);
+            localStorage.setItem("portal-clinic", JSON.stringify(cl));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [customer, clinic]);
 
   const handleLogin = async () => {
     if (code.length < 6) return;
@@ -49,7 +68,9 @@ export default function PortalPage() {
 
   const handleLogout = () => {
     localStorage.removeItem("portal-customer");
+    localStorage.removeItem("portal-clinic");
     setCustomer(null);
+    setClinic(null);
     setCode("");
   };
 
@@ -102,11 +123,21 @@ export default function PortalPage() {
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
-              <HeartPulse size={16} className="text-white" />
-            </div>
+            {clinic ? (
+              clinic.logo?.startsWith("http") ? (
+                <img src={clinic.logo} alt={clinic.name} className="w-8 h-8 rounded-lg object-cover" />
+              ) : (
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg" style={{ backgroundColor: (clinic.color || "#16a34a") + "1a" }}>
+                  {clinic.logo || "🏥"}
+                </div>
+              )
+            ) : (
+              <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
+                <HeartPulse size={16} className="text-white" />
+              </div>
+            )}
             <div>
-              <h1 className="font-bold text-gray-800 leading-none text-sm">{customer.name}</h1>
+              <h1 className="font-bold text-gray-800 leading-none text-sm">{clinic ? clinic.name : customer.name}</h1>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {isPaid ? (
                   <span className="flex items-center gap-1 text-xs text-blue-600 font-medium"><Crown size={10} /> {customer.plan.toUpperCase()}</span>
@@ -133,6 +164,32 @@ export default function PortalPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-6 pb-28">
+        {/* Clinic branding banner */}
+        {clinic && activeTab === "dashboard" && (
+          <div className="rounded-2xl p-5 mb-5 text-white" style={{ background: `linear-gradient(135deg, ${clinic.color || "#16a34a"}, ${clinic.color || "#16a34a"}cc)` }}>
+            <div className="flex items-center gap-4">
+              {clinic.logo?.startsWith("http") ? (
+                <img src={clinic.logo} alt={clinic.name} className="w-14 h-14 rounded-2xl object-cover border-2 border-white/30" />
+              ) : (
+                <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-3xl">{clinic.logo || "🏥"}</div>
+              )}
+              <div className="min-w-0">
+                <h2 className="font-bold text-lg leading-tight">{clinic.name}</h2>
+                {clinic.tagline && <p className="text-white/80 text-sm">{clinic.tagline}</p>}
+                {clinic.specialty && <p className="text-white/60 text-xs mt-0.5">{clinic.specialty}</p>}
+              </div>
+            </div>
+            {(clinic.phone || clinic.address) && (
+              <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t border-white/20 text-xs text-white/80">
+                {clinic.phone && <span className="flex items-center gap-1.5"><Phone size={12} /> {clinic.phone}</span>}
+                {clinic.address && <span className="flex items-center gap-1.5"><MapPin size={12} /> {clinic.address}</span>}
+              </div>
+            )}
+            <p className="text-white/50 text-[10px] mt-2">
+              {lang === "vi" ? `${customer.name} — bệnh nhân của ${clinic.name}` : `${customer.name} — patient of ${clinic.name}`}
+            </p>
+          </div>
+        )}
         {activeTab !== "profile" && <FamilyBar />}
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "food" && <FoodTracker />}

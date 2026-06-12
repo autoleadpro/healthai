@@ -25,6 +25,20 @@ export interface Customer {
   profile: string;
   status: string;
   notes: string;
+  clinicId?: string;
+}
+
+export interface Clinic {
+  id: string;
+  name: string;
+  tagline: string;
+  logo: string; // emoji or image URL
+  phone: string;
+  address: string;
+  email: string;
+  website: string;
+  color: string; // hex accent color
+  specialty: string;
 }
 
 export interface Stats {

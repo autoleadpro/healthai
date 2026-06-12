@@ -86,6 +86,14 @@ export interface HealthAnalysis {
     medical: string[];
   };
   weeklyPlan: Record<string, { breakfast: string; lunch: string; dinner: string; exercise: string }>;
+  nextSteps?: {
+    period: string;
+    dietFocus: Array<{ action: string; reason: string; target: string }>;
+    activityFocus: Array<{ action: string; reason: string; target: string }>;
+    habits: string[];
+    avoid: string[];
+    expectedOutcome: string;
+  };
   followUp: string;
 }
 

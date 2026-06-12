@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useHealthStore, useActiveMemberData } from "../store/healthStore";
-import { Brain, Loader2, AlertCircle, CheckCircle, Utensils, Dumbbell, Heart, Stethoscope, Calendar, ChevronDown, ChevronUp } from "lucide-react";
+import { Brain, Loader2, AlertCircle, CheckCircle, Utensils, Dumbbell, Heart, Stethoscope, Calendar, ChevronDown, ChevronUp, Target, Ban, Flame, TrendingUp } from "lucide-react";
 
 export default function HealthAnalysis() {
   const { userProfile: storeProfile, setHealthAnalysis } = useHealthStore();
@@ -236,6 +236,68 @@ export default function HealthAnalysis() {
               })}
             </div>
           </div>
+
+          {/* Next Steps — forward-looking plan */}
+          {healthAnalysis.nextSteps && (
+            <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
+              <h3 className="font-semibold mb-1 flex items-center gap-2">
+                <Target size={20} />
+                Định hướng {healthAnalysis.nextSteps.period}
+              </h3>
+              <p className="text-indigo-200 text-xs mb-5">{healthAnalysis.nextSteps.expectedOutcome}</p>
+
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5 text-indigo-100">
+                    <Utensils size={14} /> Trọng tâm ăn uống
+                  </h4>
+                  <div className="space-y-2">
+                    {healthAnalysis.nextSteps.dietFocus.map((item, i) => (
+                      <div key={i} className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
+                        <p className="text-sm font-medium">{item.action}</p>
+                        <p className="text-xs text-indigo-200 mt-0.5">{item.reason}</p>
+                        <p className="text-xs mt-1 inline-flex items-center gap-1 bg-white/15 rounded-full px-2 py-0.5">
+                          <Target size={10} /> {item.target}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5 text-indigo-100">
+                    <Dumbbell size={14} /> Trọng tâm vận động
+                  </h4>
+                  <div className="space-y-2">
+                    {healthAnalysis.nextSteps.activityFocus.map((item, i) => (
+                      <div key={i} className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
+                        <p className="text-sm font-medium">{item.action}</p>
+                        <p className="text-xs text-indigo-200 mt-0.5">{item.reason}</p>
+                        <p className="text-xs mt-1 inline-flex items-center gap-1 bg-white/15 rounded-full px-2 py-0.5">
+                          <Target size={10} /> {item.target}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white/10 rounded-xl p-3">
+                    <h4 className="text-xs font-semibold mb-2 flex items-center gap-1 text-green-200"><Flame size={12} /> Bắt đầu ngay</h4>
+                    {healthAnalysis.nextSteps.habits.map((h, i) => (
+                      <p key={i} className="text-xs text-indigo-100 py-0.5">• {h}</p>
+                    ))}
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-3">
+                    <h4 className="text-xs font-semibold mb-2 flex items-center gap-1 text-red-200"><Ban size={12} /> Cần tránh</h4>
+                    {healthAnalysis.nextSteps.avoid.map((a, i) => (
+                      <p key={i} className="text-xs text-indigo-100 py-0.5">• {a}</p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Weekly Plan */}
           {healthAnalysis.weeklyPlan && (
