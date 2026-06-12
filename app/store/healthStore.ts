@@ -14,6 +14,16 @@ export interface FamilyMember {
   conditions: string[];
 }
 
+export interface DailyLog {
+  id: string;
+  memberId: string;
+  date: string; // YYYY-MM-DD
+  sleep: number; // 1-5
+  mood: number; // 1-5
+  weight: number | null;
+  waterCups: number;
+}
+
 export interface FoodEntry {
   id: string;
   memberId?: string;
@@ -106,6 +116,10 @@ interface HealthStore {
   members: FamilyMember[];
   activeMemberId: string;
   memberAnalyses: Record<string, HealthAnalysis>;
+  dailyLogs: DailyLog[];
+  dailyTips: Record<string, string>; // key: `${date}:${memberId}`
+  upsertDailyLog: (log: Partial<DailyLog> & { memberId: string; date: string }) => void;
+  setDailyTip: (key: string, tip: string) => void;
   setActiveTab: (tab: string) => void;
   updateProfile: (profile: Partial<UserProfile>) => void;
   addFoodEntry: (entry: FoodEntry) => void;
@@ -141,6 +155,26 @@ export const useHealthStore = create<HealthStore>()(
       ],
       activeMemberId: "me",
       memberAnalyses: {},
+      dailyLogs: [],
+      dailyTips: {},
+      upsertDailyLog: (log) =>
+        set((state) => {
+          const existing = state.dailyLogs.find((l) => l.date === log.date && l.memberId === log.memberId);
+          if (existing) {
+            return { dailyLogs: state.dailyLogs.map((l) => (l.id === existing.id ? { ...l, ...log } : l)) };
+          }
+          return {
+            dailyLogs: [
+              { id: Date.now().toString(36), sleep: 0, mood: 0, weight: null, waterCups: 0, ...log },
+              ...state.dailyLogs,
+            ].slice(0, 730),
+          };
+        }),
+      setDailyTip: (key, tip) =>
+        set((state) => {
+          const entries = Object.entries(state.dailyTips).slice(-30);
+          return { dailyTips: { ...Object.fromEntries(entries), [key]: tip } };
+        }),
       setActiveTab: (tab) => set({ activeTab: tab }),
       addMember: (member) => set((state) => ({ members: [...state.members, member] })),
       updateMember: (id, data) =>
@@ -151,6 +185,7 @@ export const useHealthStore = create<HealthStore>()(
           activeMemberId: state.activeMemberId === id ? "me" : state.activeMemberId,
           foodHistory: state.foodHistory.filter((f) => (f.memberId || "me") !== id),
           labResults: state.labResults.filter((r) => (r.memberId || "me") !== id),
+          dailyLogs: state.dailyLogs.filter((l) => l.memberId !== id),
         })),
       setActiveMember: (id) => set({ activeMemberId: id }),
       updateProfile: (profile) =>
@@ -175,14 +210,31 @@ export const useHealthStore = create<HealthStore>()(
 
 // Data scoped to the currently selected family member.
 export function useActiveMemberData() {
-  const { members, activeMemberId, foodHistory, labResults, memberAnalyses, healthAnalysis } = useHealthStore();
+  const { members, activeMemberId, foodHistory, labResults, memberAnalyses, healthAnalysis, dailyLogs } = useHealthStore();
   const member = members.find((m) => m.id === activeMemberId) || members[0];
+  const memberLogs = dailyLogs.filter((l) => l.memberId === activeMemberId);
   return {
     member,
     foodHistory: foodHistory.filter((f) => (f.memberId || "me") === activeMemberId),
     labResults: labResults.filter((r) => (r.memberId || "me") === activeMemberId),
     analysis: memberAnalyses[activeMemberId] ?? (activeMemberId === "me" ? healthAnalysis : null),
+    dailyLogs: memberLogs,
+    streak: computeStreak(memberLogs),
   };
+}
+
+// Consecutive days (ending today or yesterday) with a check-in.
+export function computeStreak(logs: DailyLog[]): number {
+  const dates = new Set(logs.map((l) => l.date));
+  let streak = 0;
+  const cursor = new Date();
+  // allow the streak to survive if today isn't logged yet
+  if (!dates.has(cursor.toISOString().split("T")[0])) cursor.setDate(cursor.getDate() - 1);
+  while (dates.has(cursor.toISOString().split("T")[0])) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
 }
 
 export const RELATION_LABELS: Record<FamilyMember["relation"], { vi: string; en: string }> = {

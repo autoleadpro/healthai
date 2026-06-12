@@ -7,6 +7,7 @@ const ADMIN_ACTIONS = new Set([
   "listCustomers", "createCustomer", "updateCustomer", "deleteCustomer",
   "addCredits", "recordPayment", "listPayments", "stats",
   "listClinics", "createClinic", "updateClinic", "deleteClinic",
+  "sendMessage",
 ]);
 
 export async function POST(request: NextRequest) {

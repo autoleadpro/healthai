@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { backend, Customer, Stats, Clinic } from "../lib/api";
 import { useT, useLang } from "../lib/i18n";
-import { Users, Plus, Shield, DollarSign, Sparkles, Copy, Check, Trash2, RefreshCw, Crown, Loader2, Building2, X } from "lucide-react";
+import { Users, Plus, Shield, DollarSign, Sparkles, Copy, Check, Trash2, RefreshCw, Crown, Loader2, Building2, X, MessageSquare } from "lucide-react";
 
 function adminFetch<T>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
   const token = sessionStorage.getItem("admin-token") || "";
@@ -109,6 +109,16 @@ export default function AdminPage() {
     if (!amount) return;
     await adminFetch("addCredits", { customerId: id, amount: Number(amount) });
     load();
+  };
+
+  const handleSendMessage = async (c: Customer) => {
+    const title = prompt(lang === "vi" ? `Tiêu đề tin nhắn gửi ${c.name}:` : `Message title for ${c.name}:`);
+    if (!title) return;
+    const body = prompt(lang === "vi" ? "Nội dung:" : "Message body:");
+    if (!body) return;
+    const clinicName = clinics.find((cl) => cl.id === c.clinicId)?.name || "HealthAI";
+    await adminFetch("sendMessage", { data: { customerId: c.id, from: clinicName, title, body } });
+    alert(lang === "vi" ? "Đã gửi!" : "Sent!");
   };
 
   const copyCode = (code: string) => {
@@ -312,6 +322,9 @@ export default function AdminPage() {
                     </button>
                     <button onClick={() => handleAddCredits(c.id)} className="flex items-center gap-1 text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 px-3 py-1.5 rounded-lg" title={t("credits")}>
                       <Sparkles size={12} /> {c.aiCredits}
+                    </button>
+                    <button onClick={() => handleSendMessage(c)} className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg" title={lang === "vi" ? "Gửi tin nhắn" : "Send message"}>
+                      <MessageSquare size={12} />
                     </button>
                     <button onClick={() => handleDelete(c.id)} className="text-gray-300 hover:text-red-400 p-1.5">
                       <Trash2 size={14} />

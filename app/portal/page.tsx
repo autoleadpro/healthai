@@ -10,6 +10,11 @@ import LabResults from "../components/LabResults";
 import HealthAnalysis from "../components/HealthAnalysis";
 import Profile from "../components/Profile";
 import FamilyBar from "../components/FamilyBar";
+import DailyCheckIn from "../components/DailyCheckIn";
+import FamilyAlerts from "../components/FamilyAlerts";
+import ClinicMessages from "../components/ClinicMessages";
+import Trends from "../components/Trends";
+import { TrendingUp } from "lucide-react";
 import { LayoutDashboard, Apple, FlaskConical, Brain, User } from "lucide-react";
 import { useHealthStore } from "../store/healthStore";
 
@@ -112,6 +117,7 @@ export default function PortalPage() {
     { id: "dashboard", label: t("dashboard"), icon: LayoutDashboard },
     { id: "food", label: t("food"), icon: Apple },
     { id: "lab", label: t("lab"), icon: FlaskConical },
+    { id: "trends", label: lang === "vi" ? "Xu hướng" : "Trends", icon: TrendingUp },
     { id: "analysis", label: t("analysis"), icon: Brain },
     { id: "profile", label: t("profile"), icon: User },
   ];
@@ -191,9 +197,17 @@ export default function PortalPage() {
           </div>
         )}
         {activeTab !== "profile" && <FamilyBar />}
-        {activeTab === "dashboard" && <Dashboard />}
+        {activeTab === "dashboard" && (
+          <>
+            <ClinicMessages />
+            <FamilyAlerts />
+            <DailyCheckIn />
+            <Dashboard />
+          </>
+        )}
         {activeTab === "food" && <FoodTracker />}
         {activeTab === "lab" && <LabResults />}
+        {activeTab === "trends" && <Trends />}
         {activeTab === "analysis" && <HealthAnalysis />}
         {activeTab === "profile" && <Profile />}
       </div>

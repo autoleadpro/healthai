@@ -25,6 +25,7 @@ const SHEETS = {
   Analyses: ["id", "customerId", "createdAt", "overallScore", "riskLevel", "payload"],
   Payments: ["id", "customerId", "createdAt", "provider", "amount", "currency", "plan", "status", "externalRef"],
   Usage: ["timestamp", "customerId", "action", "detail"],
+  Messages: ["id", "customerId", "from", "title", "body", "createdAt", "read"],
 };
 
 // ===== Setup (run once manually) =====
@@ -93,6 +94,10 @@ function handle(e) {
       // Payments
       recordPayment: () => recordPayment(req.data),
       listPayments: () => listRows("Payments", req.customerId ? "customerId" : null, req.customerId),
+      // Messages (clinic → patient)
+      sendMessage: () => appendRow("Messages", Object.assign({ id: uid(), createdAt: now(), read: false }, req.data)),
+      listMessages: () => listRows("Messages", "customerId", req.customerId),
+      markMessageRead: () => updateRow("Messages", req.id, { read: true }),
       // Stats
       stats: () => stats(),
     };
