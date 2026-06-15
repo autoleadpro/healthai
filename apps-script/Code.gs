@@ -2,17 +2,18 @@
  * HealthAI Enterprise Backend — Google Apps Script REST API
  * Database: Google Sheets (free, zero hosting cost)
  *
- * SETUP:
- * 1. Create a Google Sheet, copy its ID
- * 2. script.google.com → New project → paste this file
- * 3. Set Script Properties: SHEET_ID, API_SECRET (random string), ADMIN_PASSWORD
+ * SETUP (container-bound — narrow permissions, no "access all Sheets" prompt):
+ * 1. Open your Google Sheet → Extensions → Apps Script (this binds the
+ *    script to THIS sheet, so it only needs access to this one file)
+ * 2. Paste this file as Code.gs
+ * 3. Set Script Properties: API_SECRET (random string), ADMIN_PASSWORD
+ *    (SHEET_ID is no longer needed — the script uses the sheet it lives in)
  * 4. Run setupSheets() once (authorize when asked)
  * 5. Deploy → Web app → Execute as: Me, Access: Anyone → copy the /exec URL
  * 6. Put URL + API_SECRET into Next.js .env.local
  */
 
 const PROPS = PropertiesService.getScriptProperties();
-const SHEET_ID = PROPS.getProperty("SHEET_ID");
 const API_SECRET = PROPS.getProperty("API_SECRET");
 const ADMIN_PASSWORD = PROPS.getProperty("ADMIN_PASSWORD");
 
@@ -30,7 +31,7 @@ const SHEETS = {
 
 // ===== Setup (run once manually) =====
 function setupSheets() {
-  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
   Object.entries(SHEETS).forEach(([name, headers]) => {
     let sheet = ss.getSheetByName(name);
     if (!sheet) sheet = ss.insertSheet(name);
@@ -184,7 +185,7 @@ function softDelete(id) {
 }
 
 // ===== Sheet helpers =====
-function sheet(name) { return SpreadsheetApp.openById(SHEET_ID).getSheetByName(name); }
+function sheet(name) { return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name); }
 
 function listRows(name, filterCol, filterVal) {
   const sh = sheet(name);
