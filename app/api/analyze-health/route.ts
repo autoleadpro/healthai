@@ -65,7 +65,7 @@ Hãy trả về JSON với cấu trúc sau (chỉ trả JSON):
 
 Lưu ý: dietFocus và activityFocus mỗi loại 2-3 mục, phải cụ thể và đo được (VD: "đi bộ nhanh 30 phút, 5 ngày/tuần" chứ không phải "tập thể dục nhiều hơn").`;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const result = await model.generateContent(prompt);
     const text = result.response.text();
 

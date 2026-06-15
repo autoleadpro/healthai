@@ -19,7 +19,7 @@ Bữa ăn 3 ngày gần nhất: ${JSON.stringify(recentFood)}
 Check-in gần đây (giấc ngủ 1-5, tâm trạng 1-5, nước, cân nặng): ${JSON.stringify(recentLogs)}
 Chỉ số xét nghiệm bất thường: ${JSON.stringify(abnormalLabs)}`;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const result = await model.generateContent(prompt);
     const tip = result.response.text().trim();
 

@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const bytes = await image.arrayBuffer();
     const base64 = Buffer.from(bytes).toString("base64");
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `Phân tích khẩu phần ăn trong ảnh này và trả về JSON với cấu trúc sau (chỉ trả JSON, không giải thích thêm, không bọc trong markdown):
 {
