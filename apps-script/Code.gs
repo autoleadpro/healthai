@@ -68,6 +68,9 @@ function handle(e) {
       createCustomer: () => createCustomer(req.data),
       updateCustomer: () => updateRow("Customers", req.id, req.data),
       deleteCustomer: () => softDelete(req.id),
+      // Public self-service (NOT admin-gated): trial signup + own-profile save
+      selfRegister: () => createCustomer(Object.assign({ plan: "free", aiCredits: 5 }, req.data)),
+      saveProfile: () => updateRow("Customers", req.id, { name: req.name || "", profile: req.profile || "{}" }),
       // Clinics (getClinic is public so patients see branding)
       getClinic: () => findRow("Clinics", "id", req.id),
       listClinics: () => listRows("Clinics"),

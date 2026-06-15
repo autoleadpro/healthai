@@ -1,5 +1,6 @@
 "use client";
 import { useHealthStore } from "../store/healthStore";
+import { backend } from "../lib/api";
 import { User, Save } from "lucide-react";
 import { useState } from "react";
 
@@ -15,6 +16,23 @@ export default function Profile() {
     updateProfile(form);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+    // If logged in as a portal customer, also persist name + profile to Google Sheets
+    if (typeof window !== "undefined") {
+      const raw = localStorage.getItem("portal-customer");
+      if (raw) {
+        try {
+          const customer = JSON.parse(raw);
+          backend("saveProfile", {
+            id: customer.id,
+            name: form.name,
+            profile: JSON.stringify(form),
+          }).then(() => {
+            const updated = { ...customer, name: form.name };
+            localStorage.setItem("portal-customer", JSON.stringify(updated));
+          }).catch(() => {});
+        } catch {}
+      }
+    }
   };
 
   const bmi = form.weight / Math.pow(form.height / 100, 2);

@@ -29,6 +29,9 @@ export default function PortalPage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [reg, setReg] = useState({ name: "", email: "", phone: "" });
+  const [newCode, setNewCode] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("portal-customer");
@@ -73,6 +76,28 @@ export default function PortalPage() {
     }
   };
 
+  const handleRegister = async () => {
+    if (!reg.name.trim()) { setError(true); return; }
+    setLoading(true);
+    setError(false);
+    try {
+      const created = await backend<Customer>("selfRegister", {
+        data: { name: reg.name, email: reg.email, phone: reg.phone, language: lang },
+      });
+      if (created && created.id) {
+        // Show the access code first so the user can save it, then enter
+        setNewCode(created.accessCode);
+        localStorage.setItem("portal-customer", JSON.stringify(created));
+      } else {
+        setError(true);
+      }
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("portal-customer");
     localStorage.removeItem("portal-clinic");
@@ -89,27 +114,65 @@ export default function PortalPage() {
             <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center mb-3">
               <HeartPulse size={28} className="text-white" />
             </div>
-            <h1 className="text-xl font-bold text-gray-800">{t("portalLogin")}</h1>
-            <p className="text-sm text-gray-400 mt-1">{t("enterCode")}</p>
+            <h1 className="text-xl font-bold text-gray-800">{newCode ? (lang === "vi" ? "Đăng ký thành công!" : "You're all set!") : mode === "login" ? t("portalLogin") : (lang === "vi" ? "Dùng thử miễn phí" : "Free trial")}</h1>
+            <p className="text-sm text-gray-400 mt-1">{newCode ? (lang === "vi" ? "Lưu lại mã truy cập của bạn" : "Save your access code") : mode === "login" ? t("enterCode") : (lang === "vi" ? "Tạo tài khoản trong 10 giây" : "Create an account in 10 seconds")}</p>
           </div>
-          <div className="relative mb-3">
-            <KeyRound size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
-            <input
-              value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))}
-              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-              placeholder="ABC123"
-              className="w-full border-2 border-gray-100 rounded-2xl pl-11 pr-4 py-3.5 text-center text-lg font-mono font-bold tracking-[0.3em] focus:outline-none focus:border-green-400 uppercase"
-            />
-          </div>
-          {error && <p className="text-red-500 text-sm text-center mb-3">{t("invalidCode")}</p>}
-          <button onClick={handleLogin} disabled={loading || code.length < 6} className="w-full bg-green-500 text-white py-3.5 rounded-2xl font-medium hover:bg-green-600 transition disabled:opacity-50 flex items-center justify-center gap-2">
-            {loading ? <Loader2 size={18} className="animate-spin" /> : null}
-            {t("login")}
-          </button>
-          <button onClick={() => setLang(lang === "vi" ? "en" : "vi")} className="w-full mt-3 text-xs text-gray-400 hover:text-gray-600">
-            {lang === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
-          </button>
+
+          {/* Success: show the generated access code */}
+          {newCode ? (
+            <>
+              <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 text-center mb-4">
+                <p className="text-xs text-gray-500 mb-1">{lang === "vi" ? "Mã truy cập (dùng để đăng nhập lần sau)" : "Your access code (use it to log in next time)"}</p>
+                <p className="text-3xl font-mono font-bold text-green-600 tracking-[0.3em]">{newCode}</p>
+              </div>
+              <button onClick={() => { const r = localStorage.getItem("portal-customer"); if (r) setCustomer(JSON.parse(r)); }} className="w-full bg-green-500 text-white py-3.5 rounded-2xl font-medium hover:bg-green-600 transition">
+                {lang === "vi" ? "Bắt đầu dùng ngay →" : "Start using now →"}
+              </button>
+            </>
+          ) : mode === "login" ? (
+            <>
+              <div className="relative mb-3">
+                <KeyRound size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
+                <input
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))}
+                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  placeholder="ABC123"
+                  className="w-full border-2 border-gray-100 rounded-2xl pl-11 pr-4 py-3.5 text-center text-lg font-mono font-bold tracking-[0.3em] focus:outline-none focus:border-green-400 uppercase"
+                />
+              </div>
+              {error && <p className="text-red-500 text-sm text-center mb-3">{t("invalidCode")}</p>}
+              <button onClick={handleLogin} disabled={loading || code.length < 6} className="w-full bg-green-500 text-white py-3.5 rounded-2xl font-medium hover:bg-green-600 transition disabled:opacity-50 flex items-center justify-center gap-2">
+                {loading ? <Loader2 size={18} className="animate-spin" /> : null}
+                {t("login")}
+              </button>
+              <button onClick={() => { setMode("register"); setError(false); }} className="w-full mt-3 text-sm text-green-600 font-medium hover:underline">
+                {lang === "vi" ? "Chưa có tài khoản? Đăng ký dùng thử miễn phí" : "No account? Sign up for a free trial"}
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="space-y-3 mb-3">
+                <input value={reg.name} onChange={(e) => setReg((r) => ({ ...r, name: e.target.value }))} placeholder={lang === "vi" ? "Họ và tên *" : "Full name *"} className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
+                <input value={reg.email} onChange={(e) => setReg((r) => ({ ...r, email: e.target.value }))} placeholder="Email" className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
+                <input value={reg.phone} onChange={(e) => setReg((r) => ({ ...r, phone: e.target.value }))} placeholder={lang === "vi" ? "Số điện thoại" : "Phone"} className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
+              </div>
+              {error && <p className="text-red-500 text-sm text-center mb-3">{lang === "vi" ? "Vui lòng nhập họ tên" : "Please enter your name"}</p>}
+              <button onClick={handleRegister} disabled={loading} className="w-full bg-green-500 text-white py-3.5 rounded-2xl font-medium hover:bg-green-600 transition disabled:opacity-50 flex items-center justify-center gap-2">
+                {loading ? <Loader2 size={18} className="animate-spin" /> : null}
+                {lang === "vi" ? "Đăng ký miễn phí" : "Sign up free"}
+              </button>
+              <button onClick={() => { setMode("login"); setError(false); }} className="w-full mt-3 text-sm text-gray-500 hover:underline">
+                {lang === "vi" ? "Đã có mã truy cập? Đăng nhập" : "Have an access code? Log in"}
+              </button>
+            </>
+          )}
+
+          {!newCode && (
+            <button onClick={() => setLang(lang === "vi" ? "en" : "vi")} className="w-full mt-3 text-xs text-gray-400 hover:text-gray-600">
+              {lang === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
+            </button>
+          )}
         </div>
       </div>
     );
