@@ -1,7 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useHealthStore, useActiveMemberData, LabResult } from "../store/healthStore";
-import { FlaskConical, Plus, Trash2, AlertTriangle, CheckCircle, TrendingUp, TrendingDown } from "lucide-react";
+import { backend } from "../lib/api";
+import { FlaskConical, Plus, Trash2, AlertTriangle, CheckCircle, TrendingUp, TrendingDown, Camera, Loader2, Sparkles, X } from "lucide-react";
 
 const LAB_CATEGORIES = {
   "Huyết học": [
@@ -58,10 +59,39 @@ export default function LabResults() {
     date: new Date().toISOString().split("T")[0],
   });
 
+  // AI photo extraction state
+  const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [extracted, setExtracted] = useState<LabResult[] | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   const selectedCategoryTests = LAB_CATEGORIES[form.category as keyof typeof LAB_CATEGORIES] || [];
 
   const handleTestSelect = (test: { name: string; unit: string; normalMin: number; normalMax: number }) => {
     setForm((f) => ({ ...f, name: test.name, unit: test.unit, normalMin: String(test.normalMin), normalMax: String(test.normalMax) }));
+  };
+
+  // Persist a lab result to Google Sheets when logged in as a portal customer.
+  const syncToSheet = (result: LabResult) => {
+    if (typeof window === "undefined") return;
+    const raw = localStorage.getItem("portal-customer");
+    if (!raw) return;
+    try {
+      const customer = JSON.parse(raw);
+      backend("addRecord", {
+        data: {
+          customerId: customer.id,
+          memberId: result.memberId,
+          date: result.date,
+          category: result.category,
+          name: result.name,
+          value: result.value,
+          unit: result.unit,
+          normalMin: result.normalMin ?? "",
+          normalMax: result.normalMax ?? "",
+        },
+      }).catch(() => {});
+    } catch {}
   };
 
   const handleSubmit = () => {
@@ -78,8 +108,55 @@ export default function LabResults() {
       normalMax: form.normalMax ? Number(form.normalMax) : undefined,
     };
     addLabResult(result);
+    syncToSheet(result);
     setForm({ ...form, name: "", value: "", unit: "", normalMin: "", normalMax: "" });
     setShowForm(false);
+  };
+
+  const handleScan = async (file: File) => {
+    setScanning(true);
+    setScanError(null);
+    setExtracted(null);
+    try {
+      const { consumeCredit } = await import("../lib/credits");
+      const credit = await consumeCredit("lab_scan");
+      if (!credit.ok) {
+        setScanError("Hết lượt AI. Vui lòng nâng cấp gói. / Out of AI credits.");
+        setScanning(false);
+        return;
+      }
+      const fd = new FormData();
+      fd.append("image", file);
+      const res = await fetch("/api/analyze-lab", { method: "POST", body: fd });
+      if (!res.ok) throw new Error("fail");
+      const data = await res.json();
+      const date = data.date || new Date().toISOString().split("T")[0];
+      const results: LabResult[] = (data.results || []).map((r: Record<string, unknown>, i: number) => ({
+        id: `${Date.now()}-${i}`,
+        memberId: activeMemberId,
+        date,
+        category: String(r.category || "Khác"),
+        name: String(r.name || ""),
+        value: String(r.value ?? ""),
+        unit: String(r.unit || ""),
+        normalMin: r.normalMin != null ? Number(r.normalMin) : undefined,
+        normalMax: r.normalMax != null ? Number(r.normalMax) : undefined,
+      })).filter((r: LabResult) => r.name && r.value !== "");
+      if (results.length === 0) {
+        setScanError("Không đọc được chỉ số nào từ ảnh. Thử ảnh rõ hơn hoặc nhập tay.");
+      } else {
+        setExtracted(results);
+      }
+    } catch {
+      setScanError("Không thể đọc ảnh. Vui lòng thử lại.");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const confirmExtracted = () => {
+    extracted?.forEach((r) => { addLabResult(r); syncToSheet(r); });
+    setExtracted(null);
   };
 
   const getStatus = (result: LabResult) => {
@@ -117,12 +194,57 @@ export default function LabResults() {
         </div>
       </div>
 
+      {/* AI photo scan */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-blue-100">
+        <h3 className="font-semibold text-gray-700 mb-1 flex items-center gap-2">
+          <Sparkles size={18} className="text-blue-500" /> Chụp ảnh phiếu xét nghiệm
+        </h3>
+        <p className="text-sm text-gray-400 mb-3">AI tự đọc các chỉ số từ ảnh phiếu kết quả — không cần nhập tay</p>
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={scanning}
+          className="w-full border-2 border-dashed border-blue-200 rounded-2xl py-6 text-center hover:border-blue-400 hover:bg-blue-50 transition disabled:opacity-60 flex flex-col items-center gap-2"
+        >
+          {scanning ? (
+            <><Loader2 size={28} className="text-blue-500 animate-spin" /><span className="text-sm text-blue-600">AI đang đọc phiếu xét nghiệm...</span></>
+          ) : (
+            <><Camera size={28} className="text-blue-400" /><span className="text-sm text-gray-500">Chụp hoặc tải ảnh/PDF kết quả lên</span></>
+          )}
+        </button>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleScan(e.target.files[0])} />
+        {scanError && <p className="text-red-500 text-sm mt-2">{scanError}</p>}
+      </div>
+
+      {/* Extracted results — review before saving */}
+      {extracted && (
+        <div className="bg-white rounded-2xl p-5 shadow-sm border-2 border-blue-200">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-700 flex items-center gap-2"><CheckCircle size={18} className="text-green-500" /> AI đọc được {extracted.length} chỉ số</h3>
+            <button onClick={() => setExtracted(null)} className="text-gray-300 hover:text-gray-500"><X size={18} /></button>
+          </div>
+          <div className="space-y-1.5 max-h-64 overflow-y-auto mb-4">
+            {extracted.map((r, i) => (
+              <div key={i} className="flex items-center justify-between text-sm border border-gray-100 rounded-lg px-3 py-2">
+                <div>
+                  <span className="font-medium text-gray-700">{r.name}</span>
+                  <span className="text-xs text-gray-400 ml-2">{r.category}</span>
+                </div>
+                <span className="font-bold text-blue-600">{r.value} <span className="font-normal text-gray-400 text-xs">{r.unit}</span></span>
+              </div>
+            ))}
+          </div>
+          <button onClick={confirmExtracted} className="w-full bg-blue-500 text-white py-3 rounded-xl font-medium hover:bg-blue-600 transition">
+            Lưu tất cả {extracted.length} chỉ số
+          </button>
+        </div>
+      )}
+
       <button
         onClick={() => setShowForm(!showForm)}
-        className="w-full bg-blue-500 text-white py-3 rounded-2xl font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2"
+        className="w-full bg-white text-blue-600 border border-blue-200 py-3 rounded-2xl font-medium hover:bg-blue-50 transition flex items-center justify-center gap-2"
       >
         <Plus size={20} />
-        Thêm kết quả xét nghiệm
+        Hoặc nhập tay
       </button>
 
       {showForm && (
