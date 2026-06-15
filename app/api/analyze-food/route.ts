@@ -1,39 +1,26 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 
-const client = new Anthropic();
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function POST(request: NextRequest) {
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json({ error: "GEMINI_API_KEY chưa được cấu hình trong .env.local" }, { status: 503 });
+    }
+
     const formData = await request.formData();
     const image = formData.get("image") as File;
-
     if (!image) {
       return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
 
     const bytes = await image.arrayBuffer();
     const base64 = Buffer.from(bytes).toString("base64");
-    const mediaType = image.type as "image/jpeg" | "image/png" | "image/webp";
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: mediaType,
-                data: base64,
-              },
-            },
-            {
-              type: "text",
-              text: `Phân tích khẩu phần ăn trong ảnh này và trả về JSON với cấu trúc sau (chỉ trả JSON, không giải thích thêm):
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    const prompt = `Phân tích khẩu phần ăn trong ảnh này và trả về JSON với cấu trúc sau (chỉ trả JSON, không giải thích thêm, không bọc trong markdown):
 {
   "foods": [{"name": "tên món", "portion": "khẩu phần ước tính", "calories": số, "protein": số_gram, "carbs": số_gram, "fat": số_gram}],
   "totalCalories": tổng_calo,
@@ -43,30 +30,20 @@ export async function POST(request: NextRequest) {
   "nutritionScore": điểm_1_10,
   "assessment": "đánh giá ngắn về dinh dưỡng",
   "suggestions": ["gợi ý 1", "gợi ý 2", "gợi ý 3"]
-}`,
-            },
-          ],
-        },
-      ],
-    });
+}`;
 
-    const content = response.content[0];
-    if (content.type !== "text") {
-      throw new Error("Unexpected response type");
-    }
+    const result = await model.generateContent([
+      prompt,
+      { inlineData: { data: base64, mimeType: image.type || "image/jpeg" } },
+    ]);
 
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No JSON found in response");
-    }
+    const text = result.response.text();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON found in response");
 
-    const result = JSON.parse(jsonMatch[0]);
-    return NextResponse.json(result);
+    return NextResponse.json(JSON.parse(jsonMatch[0]));
   } catch (error) {
     console.error("Error analyzing food:", error);
-    return NextResponse.json(
-      { error: "Failed to analyze food image" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to analyze food image" }, { status: 500 });
   }
 }

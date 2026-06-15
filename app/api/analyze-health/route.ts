@@ -1,10 +1,14 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 
-const client = new Anthropic();
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export async function POST(request: NextRequest) {
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json({ error: "GEMINI_API_KEY chưa được cấu hình trong .env.local" }, { status: 503 });
+    }
+
     const body = await request.json();
     const { labResults, foodHistory, userProfile } = body;
 
@@ -61,16 +65,11 @@ Hãy trả về JSON với cấu trúc sau (chỉ trả JSON):
 
 Lưu ý: dietFocus và activityFocus mỗi loại 2-3 mục, phải cụ thể và đo được (VD: "đi bộ nhanh 30 phút, 5 ngày/tuần" chứ không phải "tập thể dục nhiều hơn").`;
 
-    const response = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
-    });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
 
-    const content = response.content[0];
-    if (content.type !== "text") throw new Error("Unexpected response type");
-
-    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON found");
 
     return NextResponse.json(JSON.parse(jsonMatch[0]));
