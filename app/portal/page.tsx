@@ -49,10 +49,12 @@ export default function PortalPage() {
   const [clinic, setClinic] = useState<Clinic | null>(null);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [regType, setRegType] = useState<"individual" | "clinic">("individual");
-  const [reg, setReg] = useState({ name: "", email: "", phone: "", clinicName: "" });
+  const [reg, setReg] = useState({ name: "", email: "", phone: "", clinicName: "", password: "" });
+  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [loginByCode, setLoginByCode] = useState(false);
   const [newCode, setNewCode] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,58 +81,84 @@ export default function PortalPage() {
     }
   }, [customer, clinic]);
 
+  const enter = async (found: Customer) => {
+    await hydrateCustomer(found);
+    setCustomer(found);
+    localStorage.setItem("portal-customer", JSON.stringify(found));
+  };
+
   const handleLogin = async () => {
-    if (code.length < 6) return;
     setLoading(true);
-    setError(false);
+    setError(null);
     try {
-      const found = await backend<Customer | null>("customerByCode", { code });
-      if (found && found.id && found.status === "active") {
-        await hydrateCustomer(found);
-        setCustomer(found);
-        localStorage.setItem("portal-customer", JSON.stringify(found));
+      if (loginByCode) {
+        if (code.length < 6) { setError("invalid"); setLoading(false); return; }
+        const found = await backend<Customer | null>("customerByCode", { code });
+        if (found && found.id && found.status === "active") await enter(found);
+        else setError("invalid_code");
       } else {
-        setError(true);
+        if (!loginForm.email || !loginForm.password) { setError("invalid"); setLoading(false); return; }
+        const res = await backend<Customer & { error?: string }>("loginEmail", { email: loginForm.email, password: loginForm.password });
+        if (res && (res as { error?: string }).error) setError((res as { error?: string }).error || "wrong");
+        else if (res && res.id) await enter(res);
+        else setError("wrong");
       }
     } catch {
-      setError(true);
+      setError("network");
     } finally {
       setLoading(false);
     }
   };
 
   const handleRegister = async () => {
-    if (regType === "clinic" ? !reg.clinicName.trim() : !reg.name.trim()) { setError(true); return; }
+    if (regType === "clinic" ? !reg.clinicName.trim() : !reg.name.trim()) { setError("required"); return; }
+    if (!reg.email.trim() || reg.password.length < 6) { setError("need_credentials"); return; }
     setLoading(true);
-    setError(false);
+    setError(null);
     try {
-      let created: Customer | null = null;
+      let created: (Customer & { error?: string }) | null = null;
       if (regType === "clinic") {
-        const res = await backend<{ customer: Customer; clinic: Clinic }>("registerClinic", {
-          data: { clinicName: reg.clinicName, name: reg.name || reg.clinicName, email: reg.email, phone: reg.phone, language: lang },
+        const res = await backend<{ customer: Customer & { error?: string }; clinic: Clinic; error?: string }>("registerClinic", {
+          data: { clinicName: reg.clinicName, name: reg.name || reg.clinicName, email: reg.email, phone: reg.phone, password: reg.password, language: lang },
         });
+        if (res && (res as { error?: string }).error) { setError((res as { error?: string }).error || "fail"); setLoading(false); return; }
         if (res && res.customer && res.customer.id) {
           created = res.customer;
           if (res.clinic) localStorage.setItem("portal-clinic", JSON.stringify(res.clinic));
         }
       } else {
-        created = await backend<Customer>("selfRegister", {
-          data: { name: reg.name, email: reg.email, phone: reg.phone, language: lang },
+        created = await backend<Customer & { error?: string }>("selfRegister", {
+          data: { name: reg.name, email: reg.email, phone: reg.phone, password: reg.password, language: lang },
         });
+        if (created && created.error) { setError(created.error); setLoading(false); return; }
       }
       if (created && created.id) {
-        // Fresh account — wipe any previous account's local data
         loginAsCustomer(created);
         setNewCode(created.accessCode);
         localStorage.setItem("portal-customer", JSON.stringify(created));
       } else {
-        setError(true);
+        setError("fail");
       }
     } catch {
-      setError(true);
+      setError("network");
     } finally {
       setLoading(false);
     }
+  };
+
+  const errorText = (code: string | null): string => {
+    if (!code) return "";
+    const m: Record<string, { vi: string; en: string }> = {
+      email_exists: { vi: "Email này đã được đăng ký", en: "Email already registered" },
+      wrong_password: { vi: "Sai mật khẩu", en: "Wrong password" },
+      not_found: { vi: "Không tìm thấy tài khoản với email này", en: "No account with that email" },
+      no_password: { vi: "Tài khoản này dùng mã truy cập, hãy đăng nhập bằng mã", en: "This account uses an access code" },
+      invalid_code: { vi: "Mã truy cập không đúng", en: "Invalid access code" },
+      need_credentials: { vi: "Cần email và mật khẩu (≥6 ký tự)", en: "Email and password (6+ chars) required" },
+      required: { vi: "Vui lòng nhập tên", en: "Please enter the required name" },
+      network: { vi: "Lỗi kết nối, thử lại", en: "Connection error" },
+    };
+    return (m[code] || { vi: "Có lỗi, thử lại", en: "Something went wrong" })[lang];
   };
 
   const handleLogout = () => {
@@ -152,16 +180,16 @@ export default function PortalPage() {
             <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center mb-3">
               <HeartPulse size={28} className="text-white" />
             </div>
-            <h1 className="text-xl font-bold text-gray-800">{newCode ? (lang === "vi" ? "Đăng ký thành công!" : "You're all set!") : mode === "login" ? t("portalLogin") : (lang === "vi" ? "Dùng thử miễn phí" : "Free trial")}</h1>
-            <p className="text-sm text-gray-400 mt-1">{newCode ? (lang === "vi" ? "Lưu lại mã truy cập của bạn" : "Save your access code") : mode === "login" ? t("enterCode") : (lang === "vi" ? "Tạo tài khoản trong 10 giây" : "Create an account in 10 seconds")}</p>
+            <h1 className="text-xl font-bold text-gray-800">{newCode ? (lang === "vi" ? "Đăng ký thành công!" : "You're all set!") : mode === "login" ? (lang === "vi" ? "Đăng nhập" : "Log in") : (lang === "vi" ? "Tạo tài khoản" : "Create account")}</h1>
+            <p className="text-sm text-gray-400 mt-1">{newCode ? (lang === "vi" ? "Tài khoản của bạn đã sẵn sàng" : "Your account is ready") : mode === "login" ? (lang === "vi" ? "Dùng email và mật khẩu" : "Use your email and password") : (lang === "vi" ? "Đăng ký dùng thử miễn phí" : "Free trial signup")}</p>
           </div>
 
-          {/* Success: show the generated access code */}
+          {/* Success after registration */}
           {newCode ? (
             <>
               <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-5 text-center mb-4">
-                <p className="text-xs text-gray-500 mb-1">{lang === "vi" ? "Mã truy cập (dùng để đăng nhập lần sau)" : "Your access code (use it to log in next time)"}</p>
-                <p className="text-3xl font-mono font-bold text-green-600 tracking-[0.3em]">{newCode}</p>
+                <p className="text-sm text-gray-600">{lang === "vi" ? "Bạn đăng nhập lần sau bằng email + mật khẩu vừa tạo." : "Next time, log in with your email and password."}</p>
+                <p className="text-xs text-gray-400 mt-2">{lang === "vi" ? "Mã nội bộ" : "Internal code"}: <span className="font-mono">{newCode}</span></p>
               </div>
               <button onClick={() => { const r = localStorage.getItem("portal-customer"); if (r) setCustomer(JSON.parse(r)); }} className="w-full bg-green-500 text-white py-3.5 rounded-2xl font-medium hover:bg-green-600 transition">
                 {lang === "vi" ? "Bắt đầu dùng ngay →" : "Start using now →"}
@@ -169,22 +197,26 @@ export default function PortalPage() {
             </>
           ) : mode === "login" ? (
             <>
-              <div className="relative mb-3">
-                <KeyRound size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
-                <input
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))}
-                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                  placeholder="ABC123"
-                  className="w-full border-2 border-gray-100 rounded-2xl pl-11 pr-4 py-3.5 text-center text-lg font-mono font-bold tracking-[0.3em] focus:outline-none focus:border-green-400 uppercase"
-                />
-              </div>
-              {error && <p className="text-red-500 text-sm text-center mb-3">{t("invalidCode")}</p>}
-              <button onClick={handleLogin} disabled={loading || code.length < 6} className="w-full bg-green-500 text-white py-3.5 rounded-2xl font-medium hover:bg-green-600 transition disabled:opacity-50 flex items-center justify-center gap-2">
+              {loginByCode ? (
+                <div className="relative mb-3">
+                  <KeyRound size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
+                  <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))} onKeyDown={(e) => e.key === "Enter" && handleLogin()} placeholder="ABC123" className="w-full border-2 border-gray-100 rounded-2xl pl-11 pr-4 py-3.5 text-center text-lg font-mono font-bold tracking-[0.3em] focus:outline-none focus:border-green-400 uppercase" />
+                </div>
+              ) : (
+                <div className="space-y-3 mb-3">
+                  <input type="email" value={loginForm.email} onChange={(e) => setLoginForm((f) => ({ ...f, email: e.target.value }))} placeholder="Email" className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
+                  <input type="password" value={loginForm.password} onChange={(e) => setLoginForm((f) => ({ ...f, password: e.target.value }))} onKeyDown={(e) => e.key === "Enter" && handleLogin()} placeholder={lang === "vi" ? "Mật khẩu" : "Password"} className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
+                </div>
+              )}
+              {error && <p className="text-red-500 text-sm text-center mb-3">{errorText(error)}</p>}
+              <button onClick={handleLogin} disabled={loading} className="w-full bg-green-500 text-white py-3.5 rounded-2xl font-medium hover:bg-green-600 transition disabled:opacity-50 flex items-center justify-center gap-2">
                 {loading ? <Loader2 size={18} className="animate-spin" /> : null}
                 {t("login")}
               </button>
-              <button onClick={() => { setMode("register"); setError(false); }} className="w-full mt-3 text-sm text-green-600 font-medium hover:underline">
+              <button onClick={() => { setLoginByCode(!loginByCode); setError(null); }} className="w-full mt-2 text-xs text-gray-400 hover:text-gray-600">
+                {loginByCode ? (lang === "vi" ? "← Đăng nhập bằng email/mật khẩu" : "← Log in with email/password") : (lang === "vi" ? "Bệnh nhân có mã truy cập? Đăng nhập bằng mã" : "Have an access code? Log in with code")}
+              </button>
+              <button onClick={() => { setMode("register"); setError(null); }} className="w-full mt-2 text-sm text-green-600 font-medium hover:underline">
                 {lang === "vi" ? "Chưa có tài khoản? Đăng ký dùng thử miễn phí" : "No account? Sign up for a free trial"}
               </button>
             </>
@@ -204,19 +236,20 @@ export default function PortalPage() {
                   <input value={reg.clinicName} onChange={(e) => setReg((r) => ({ ...r, clinicName: e.target.value }))} placeholder={lang === "vi" ? "Tên phòng khám *" : "Clinic name *"} className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
                 )}
                 <input value={reg.name} onChange={(e) => setReg((r) => ({ ...r, name: e.target.value }))} placeholder={regType === "clinic" ? (lang === "vi" ? "Tên người phụ trách" : "Contact person") : (lang === "vi" ? "Họ và tên *" : "Full name *")} className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
-                <input value={reg.email} onChange={(e) => setReg((r) => ({ ...r, email: e.target.value }))} placeholder="Email" className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
+                <input type="email" value={reg.email} onChange={(e) => setReg((r) => ({ ...r, email: e.target.value }))} placeholder="Email *" className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
+                <input type="password" value={reg.password} onChange={(e) => setReg((r) => ({ ...r, password: e.target.value }))} placeholder={lang === "vi" ? "Mật khẩu (≥6 ký tự) *" : "Password (6+ chars) *"} className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
                 <input value={reg.phone} onChange={(e) => setReg((r) => ({ ...r, phone: e.target.value }))} placeholder={lang === "vi" ? "Số điện thoại" : "Phone"} className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
               </div>
               {regType === "clinic" && (
                 <p className="text-xs text-gray-400 mb-3">{lang === "vi" ? "Gói Phòng khám: quản lý nhiều bệnh nhân, 50 lượt AI dùng thử." : "Clinic plan: manage many patients, 50 trial AI credits."}</p>
               )}
-              {error && <p className="text-red-500 text-sm text-center mb-3">{lang === "vi" ? (regType === "clinic" ? "Vui lòng nhập tên phòng khám" : "Vui lòng nhập họ tên") : "Please fill the required field"}</p>}
+              {error && <p className="text-red-500 text-sm text-center mb-3">{errorText(error)}</p>}
               <button onClick={handleRegister} disabled={loading} className="w-full bg-green-500 text-white py-3.5 rounded-2xl font-medium hover:bg-green-600 transition disabled:opacity-50 flex items-center justify-center gap-2">
                 {loading ? <Loader2 size={18} className="animate-spin" /> : null}
                 {lang === "vi" ? "Đăng ký miễn phí" : "Sign up free"}
               </button>
-              <button onClick={() => { setMode("login"); setError(false); }} className="w-full mt-3 text-sm text-gray-500 hover:underline">
-                {lang === "vi" ? "Đã có mã truy cập? Đăng nhập" : "Have an access code? Log in"}
+              <button onClick={() => { setMode("login"); setError(null); }} className="w-full mt-3 text-sm text-gray-500 hover:underline">
+                {lang === "vi" ? "Đã có tài khoản? Đăng nhập" : "Already have an account? Log in"}
               </button>
             </>
           )}

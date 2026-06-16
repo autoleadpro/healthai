@@ -18,7 +18,7 @@ const API_SECRET = PROPS.getProperty("API_SECRET");
 const ADMIN_PASSWORD = PROPS.getProperty("ADMIN_PASSWORD");
 
 const SHEETS = {
-  Customers: ["id", "createdAt", "name", "email", "phone", "language", "plan", "planExpiry", "aiCredits", "accessCode", "profile", "status", "notes", "clinicId"],
+  Customers: ["id", "createdAt", "name", "email", "phone", "language", "plan", "planExpiry", "aiCredits", "accessCode", "profile", "status", "notes", "clinicId", "passwordHash", "salt"],
   Clinics: ["id", "createdAt", "name", "tagline", "logo", "phone", "address", "email", "website", "color", "specialty"],
   Members: ["id", "customerId", "name", "relation", "age", "gender", "height", "weight", "avatar", "conditions", "createdAt"],
   Records: ["id", "customerId", "memberId", "date", "category", "name", "value", "unit", "normalMin", "normalMax", "createdAt"],
@@ -38,6 +38,13 @@ function setupSheets() {
     if (sheet.getLastRow() === 0) {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold");
       sheet.setFrozenRows(1);
+    } else {
+      // Migrate: append any header columns added since the sheet was created
+      const existing = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      const missing = headers.filter((h) => existing.indexOf(h) === -1);
+      if (missing.length) {
+        sheet.getRange(1, existing.length + 1, 1, missing.length).setValues([missing]).setFontWeight("bold");
+      }
     }
   });
   Logger.log("Sheets ready");
@@ -62,15 +69,16 @@ function handle(e) {
     const routes = {
       adminLogin: () => ({ ok: req.password === ADMIN_PASSWORD }),
       // Customers
-      listCustomers: () => listRows("Customers"),
-      getCustomer: () => findRow("Customers", "id", req.id),
-      customerByCode: () => findRow("Customers", "accessCode", String(req.code).toUpperCase()),
+      listCustomers: () => listRows("Customers").map(stripSecrets),
+      getCustomer: () => stripSecrets(findRow("Customers", "id", req.id)),
+      customerByCode: () => stripSecrets(findRow("Customers", "accessCode", String(req.code).toUpperCase())),
       createCustomer: () => createCustomer(req.data),
       updateCustomer: () => updateRow("Customers", req.id, req.data),
       deleteCustomer: () => softDelete(req.id),
-      // Public self-service (NOT admin-gated): trial signup + own-profile save
-      selfRegister: () => createCustomer(Object.assign({ plan: "free", aiCredits: 5 }, req.data)),
+      // Public self-service (NOT admin-gated): email/password auth + own-profile save
+      selfRegister: () => registerWithEmail(req.data, { plan: "free", aiCredits: 5 }),
       registerClinic: () => registerClinic(req.data),
+      loginEmail: () => loginEmail(req.email, req.password),
       saveProfile: () => updateRow("Customers", req.id, { name: req.name || "", profile: req.profile || "{}" }),
       // Clinics (getClinic is public so patients see branding)
       getClinic: () => findRow("Clinics", "id", req.id),
@@ -114,9 +122,54 @@ function handle(e) {
   }
 }
 
+// ===== Auth helpers =====
+function hashPw(pw, salt) {
+  const raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(pw) + ":" + String(salt), Utilities.Charset.UTF_8);
+  return raw.map(function (b) { return ((b & 0xff) + 0x100).toString(16).slice(1); }).join("");
+}
+
+// Never return password hash / salt to the client.
+function stripSecrets(row) {
+  if (!row) return row;
+  const copy = Object.assign({}, row);
+  delete copy.passwordHash;
+  delete copy.salt;
+  return copy;
+}
+
+function emailExists(email) {
+  if (!email) return false;
+  const e = String(email).toLowerCase();
+  return listRows("Customers").some(function (r) {
+    return r.status === "active" && String(r.email).toLowerCase() === e;
+  });
+}
+
+function registerWithEmail(data, extra) {
+  if (!data || !data.email) return { error: "email_required" };
+  if (!data.password) return { error: "password_required" };
+  if (emailExists(data.email)) return { error: "email_exists" };
+  return createCustomer(Object.assign({}, extra, data));
+}
+
+function loginEmail(email, password) {
+  if (!email || !password) return { error: "missing" };
+  const e = String(email).toLowerCase();
+  const c = listRows("Customers").find(function (r) {
+    return r.status === "active" && String(r.email).toLowerCase() === e;
+  });
+  if (!c) return { error: "not_found" };
+  if (!c.passwordHash) return { error: "no_password" };
+  if (hashPw(password, c.salt) !== c.passwordHash) return { error: "wrong_password" };
+  return stripSecrets(c);
+}
+
 // ===== Business logic =====
 // Public clinic signup: creates a Clinic + an owner Customer (clinic plan, trial credits).
 function registerClinic(data) {
+  if (!data || !data.email) return { error: "email_required" };
+  if (!data.password) return { error: "password_required" };
+  if (emailExists(data.email)) return { error: "email_exists" };
   const clinic = appendRow("Clinics", {
     id: uid(),
     createdAt: now(),
@@ -134,6 +187,7 @@ function registerClinic(data) {
     name: data.name || data.clinicName || "",
     email: data.email || "",
     phone: data.phone || "",
+    password: data.password || "",
     language: data.language || "vi",
     plan: "clinic",
     aiCredits: 50,
@@ -158,9 +212,15 @@ function createCustomer(data) {
     status: "active",
     notes: data.notes || "",
     clinicId: data.clinicId || "",
+    passwordHash: "",
+    salt: "",
   };
+  if (data.password) {
+    row.salt = uid() + uid();
+    row.passwordHash = hashPw(data.password, row.salt);
+  }
   appendRow("Customers", row);
-  return row;
+  return stripSecrets(row);
 }
 
 function useCredit(customerId, amount, detail) {
