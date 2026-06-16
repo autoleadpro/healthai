@@ -161,7 +161,30 @@ interface HealthStore {
   updateMember: (id: string, data: Partial<FamilyMember>) => void;
   removeMember: (id: string) => void;
   setActiveMember: (id: string) => void;
+  ownerId: string | null;
+  loginAsCustomer: (customer: { id: string; name?: string; profile?: string }) => void;
+  clearSession: () => void;
+  setLabResults: (results: LabResult[]) => void;
 }
+
+const DEFAULT_PROFILE: UserProfile = {
+  name: "", age: 30, gender: "male", height: 170, weight: 65,
+  activityLevel: "moderate", healthGoals: [], conditions: [],
+};
+
+const blankData = () => ({
+  userProfile: { ...DEFAULT_PROFILE },
+  foodHistory: [] as FoodEntry[],
+  labResults: [] as LabResult[],
+  healthAnalysis: null as HealthAnalysis | null,
+  members: [{ id: "me", name: "Tôi", relation: "self" as const, age: 30, gender: "male" as const, height: 170, weight: 65, avatar: "😊", conditions: [] }],
+  activeMemberId: "me",
+  memberAnalyses: {} as Record<string, HealthAnalysis>,
+  dailyLogs: [] as DailyLog[],
+  dailyTips: {} as Record<string, string>,
+  medications: [] as Medication[],
+  doseLogs: [] as DoseLog[],
+});
 
 export const useHealthStore = create<HealthStore>()(
   persist(
@@ -189,6 +212,23 @@ export const useHealthStore = create<HealthStore>()(
       dailyTips: {},
       medications: [],
       doseLogs: [],
+      ownerId: null,
+      // Called on login/register. If a different customer than last time,
+      // wipe all local health data so accounts never see each other's data.
+      loginAsCustomer: (customer) =>
+        set((state) => {
+          if (state.ownerId === customer.id) return {}; // same account — keep cached data
+          let profile = { ...DEFAULT_PROFILE, name: customer.name || "" };
+          try {
+            if (customer.profile && customer.profile !== "{}") {
+              const p = JSON.parse(customer.profile);
+              profile = { ...profile, ...p, name: customer.name || p.name || "" };
+            }
+          } catch {}
+          return { ...blankData(), userProfile: profile, ownerId: customer.id };
+        }),
+      clearSession: () => set({ ...blankData(), ownerId: null }),
+      setLabResults: (results) => set({ labResults: results }),
       addMedication: (med) => set((state) => ({ medications: [...state.medications, med] })),
       updateMedication: (id, data) =>
         set((state) => ({ medications: state.medications.map((m) => (m.id === id ? { ...m, ...data } : m)) })),

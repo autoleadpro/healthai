@@ -23,7 +23,28 @@ import { useHealthStore } from "../store/healthStore";
 export default function PortalPage() {
   const t = useT();
   const { lang, setLang } = useLang();
-  const { activeTab, setActiveTab } = useHealthStore();
+  const { activeTab, setActiveTab, loginAsCustomer, clearSession, setLabResults } = useHealthStore();
+
+  // Reset/scope local data to this customer, then pull their lab records from Sheets.
+  const hydrateCustomer = async (c: Customer) => {
+    loginAsCustomer(c);
+    try {
+      const records = await backend<Array<Record<string, unknown>>>("listRecords", { customerId: c.id });
+      if (Array.isArray(records) && records.length) {
+        setLabResults(records.map((r, i) => ({
+          id: String(r.id || `${Date.now()}-${i}`),
+          memberId: String(r.memberId || "me"),
+          date: String(r.date || ""),
+          category: String(r.category || "Khác"),
+          name: String(r.name || ""),
+          value: String(r.value ?? ""),
+          unit: String(r.unit || ""),
+          normalMin: r.normalMin !== "" && r.normalMin != null ? Number(r.normalMin) : undefined,
+          normalMax: r.normalMax !== "" && r.normalMax != null ? Number(r.normalMax) : undefined,
+        })));
+      }
+    } catch {}
+  };
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [clinic, setClinic] = useState<Clinic | null>(null);
   const [code, setCode] = useState("");
@@ -64,6 +85,7 @@ export default function PortalPage() {
     try {
       const found = await backend<Customer | null>("customerByCode", { code });
       if (found && found.id && found.status === "active") {
+        await hydrateCustomer(found);
         setCustomer(found);
         localStorage.setItem("portal-customer", JSON.stringify(found));
       } else {
@@ -85,7 +107,8 @@ export default function PortalPage() {
         data: { name: reg.name, email: reg.email, phone: reg.phone, language: lang },
       });
       if (created && created.id) {
-        // Show the access code first so the user can save it, then enter
+        // Fresh account — wipe any previous account's local data
+        loginAsCustomer(created);
         setNewCode(created.accessCode);
         localStorage.setItem("portal-customer", JSON.stringify(created));
       } else {
@@ -101,9 +124,12 @@ export default function PortalPage() {
   const handleLogout = () => {
     localStorage.removeItem("portal-customer");
     localStorage.removeItem("portal-clinic");
+    clearSession();
     setCustomer(null);
     setClinic(null);
     setCode("");
+    setNewCode(null);
+    setMode("login");
   };
 
   if (!customer) {
