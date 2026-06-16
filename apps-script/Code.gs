@@ -70,6 +70,7 @@ function handle(e) {
       deleteCustomer: () => softDelete(req.id),
       // Public self-service (NOT admin-gated): trial signup + own-profile save
       selfRegister: () => createCustomer(Object.assign({ plan: "free", aiCredits: 5 }, req.data)),
+      registerClinic: () => registerClinic(req.data),
       saveProfile: () => updateRow("Customers", req.id, { name: req.name || "", profile: req.profile || "{}" }),
       // Clinics (getClinic is public so patients see branding)
       getClinic: () => findRow("Clinics", "id", req.id),
@@ -114,6 +115,33 @@ function handle(e) {
 }
 
 // ===== Business logic =====
+// Public clinic signup: creates a Clinic + an owner Customer (clinic plan, trial credits).
+function registerClinic(data) {
+  const clinic = appendRow("Clinics", {
+    id: uid(),
+    createdAt: now(),
+    name: data.clinicName || "",
+    tagline: data.tagline || "",
+    logo: data.logo || "🏥",
+    phone: data.phone || "",
+    address: data.address || "",
+    email: data.email || "",
+    website: "",
+    color: data.color || "#16a34a",
+    specialty: data.specialty || "",
+  });
+  const customer = createCustomer({
+    name: data.name || data.clinicName || "",
+    email: data.email || "",
+    phone: data.phone || "",
+    language: data.language || "vi",
+    plan: "clinic",
+    aiCredits: 50,
+    clinicId: clinic.id,
+  });
+  return { customer: customer, clinic: clinic };
+}
+
 function createCustomer(data) {
   const row = {
     id: uid(),

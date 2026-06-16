@@ -51,7 +51,8 @@ export default function PortalPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [reg, setReg] = useState({ name: "", email: "", phone: "" });
+  const [regType, setRegType] = useState<"individual" | "clinic">("individual");
+  const [reg, setReg] = useState({ name: "", email: "", phone: "", clinicName: "" });
   const [newCode, setNewCode] = useState<string | null>(null);
 
   useEffect(() => {
@@ -99,13 +100,24 @@ export default function PortalPage() {
   };
 
   const handleRegister = async () => {
-    if (!reg.name.trim()) { setError(true); return; }
+    if (regType === "clinic" ? !reg.clinicName.trim() : !reg.name.trim()) { setError(true); return; }
     setLoading(true);
     setError(false);
     try {
-      const created = await backend<Customer>("selfRegister", {
-        data: { name: reg.name, email: reg.email, phone: reg.phone, language: lang },
-      });
+      let created: Customer | null = null;
+      if (regType === "clinic") {
+        const res = await backend<{ customer: Customer; clinic: Clinic }>("registerClinic", {
+          data: { clinicName: reg.clinicName, name: reg.name || reg.clinicName, email: reg.email, phone: reg.phone, language: lang },
+        });
+        if (res && res.customer && res.customer.id) {
+          created = res.customer;
+          if (res.clinic) localStorage.setItem("portal-clinic", JSON.stringify(res.clinic));
+        }
+      } else {
+        created = await backend<Customer>("selfRegister", {
+          data: { name: reg.name, email: reg.email, phone: reg.phone, language: lang },
+        });
+      }
       if (created && created.id) {
         // Fresh account — wipe any previous account's local data
         loginAsCustomer(created);
@@ -178,12 +190,27 @@ export default function PortalPage() {
             </>
           ) : (
             <>
+              {/* Account type selector */}
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <button onClick={() => setRegType("individual")} className={`py-2.5 rounded-xl text-sm font-medium border-2 transition ${regType === "individual" ? "border-green-400 bg-green-50 text-green-700" : "border-gray-100 text-gray-500 hover:border-green-200"}`}>
+                  🧑 {lang === "vi" ? "Cá nhân" : "Individual"}
+                </button>
+                <button onClick={() => setRegType("clinic")} className={`py-2.5 rounded-xl text-sm font-medium border-2 transition ${regType === "clinic" ? "border-green-400 bg-green-50 text-green-700" : "border-gray-100 text-gray-500 hover:border-green-200"}`}>
+                  🏥 {lang === "vi" ? "Phòng khám" : "Clinic"}
+                </button>
+              </div>
               <div className="space-y-3 mb-3">
-                <input value={reg.name} onChange={(e) => setReg((r) => ({ ...r, name: e.target.value }))} placeholder={lang === "vi" ? "Họ và tên *" : "Full name *"} className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
+                {regType === "clinic" && (
+                  <input value={reg.clinicName} onChange={(e) => setReg((r) => ({ ...r, clinicName: e.target.value }))} placeholder={lang === "vi" ? "Tên phòng khám *" : "Clinic name *"} className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
+                )}
+                <input value={reg.name} onChange={(e) => setReg((r) => ({ ...r, name: e.target.value }))} placeholder={regType === "clinic" ? (lang === "vi" ? "Tên người phụ trách" : "Contact person") : (lang === "vi" ? "Họ và tên *" : "Full name *")} className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
                 <input value={reg.email} onChange={(e) => setReg((r) => ({ ...r, email: e.target.value }))} placeholder="Email" className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
                 <input value={reg.phone} onChange={(e) => setReg((r) => ({ ...r, phone: e.target.value }))} placeholder={lang === "vi" ? "Số điện thoại" : "Phone"} className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-green-400" />
               </div>
-              {error && <p className="text-red-500 text-sm text-center mb-3">{lang === "vi" ? "Vui lòng nhập họ tên" : "Please enter your name"}</p>}
+              {regType === "clinic" && (
+                <p className="text-xs text-gray-400 mb-3">{lang === "vi" ? "Gói Phòng khám: quản lý nhiều bệnh nhân, 50 lượt AI dùng thử." : "Clinic plan: manage many patients, 50 trial AI credits."}</p>
+              )}
+              {error && <p className="text-red-500 text-sm text-center mb-3">{lang === "vi" ? (regType === "clinic" ? "Vui lòng nhập tên phòng khám" : "Vui lòng nhập họ tên") : "Please fill the required field"}</p>}
               <button onClick={handleRegister} disabled={loading} className="w-full bg-green-500 text-white py-3.5 rounded-2xl font-medium hover:bg-green-600 transition disabled:opacity-50 flex items-center justify-center gap-2">
                 {loading ? <Loader2 size={18} className="animate-spin" /> : null}
                 {lang === "vi" ? "Đăng ký miễn phí" : "Sign up free"}
